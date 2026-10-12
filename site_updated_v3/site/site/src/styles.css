@@ -622,15 +622,27 @@ tbody tr:hover {
 }
 
 .food-emoji {
-    display: grid;
-    place-items: center;
+    display: block;
     flex-shrink: 0;
     width: 29px;
     height: 29px;
-    background: #f8f6fc;
-    border: 1px solid #f0edf8;
     border-radius: 9px;
-    font-size: 16px
+    object-fit: cover; /* Ключевое свойство: обрезает картинку по границам, не искажая пропорции */
+    background: #f8f6fc; /* Цвет фона, если картинка не загрузится */
+    border: 1px solid #f0edf8;
+}
+
+.food-emoji:not([src]), 
+.food-emoji[src=""] {
+    visibility: hidden;
+}
+
+.dish-art-img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
 }
 
 .strong-cell {
@@ -2122,14 +2134,14 @@ td {
 }
 
 .order-dish-emoji {
-    display: grid;
-    place-items: center;
+    display: block;
     flex-shrink: 0;
     width: 44px;
     height: 44px;
     border-radius: 11px;
+    object-fit: cover;
     background: #f0eaff;
-    font-size: 25px
+    border: 1px solid #e8e1f7;
 }
 
 .order-dish-info {
@@ -3820,4 +3832,75 @@ html[data-theme="dark"] .search-box input::placeholder {
         -webkit-text-fill-color: #89849e;
         opacity: 1;
     }
+}
+
+/* Карточки горячих предложений и окно подробностей блюда */
+.dish-card-clickable { cursor: pointer; transition: transform .2s ease, box-shadow .2s ease; }
+.dish-card-clickable:hover { transform: translateY(-3px); box-shadow: 0 12px 30px rgba(42, 27, 94, .12); }
+.dish-art { height: 250px; }
+.dish-art-img { object-position: center; }
+.dish-modal-backdrop { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; padding: 22px; background: rgba(22, 18, 39, .62); backdrop-filter: blur(5px); }
+.dish-modal { position: relative; display: grid; grid-template-columns: minmax(260px, .95fr) minmax(300px, 1.05fr); width: min(850px, 100%); max-height: min(90vh, 760px); overflow: auto; background: var(--surface, #fff); border-radius: 22px; box-shadow: 0 25px 80px rgba(0,0,0,.25); }
+.dish-modal-image { width: 100%; height: 100%; min-height: 420px; object-fit: cover; background: #f5f1ff; }
+.dish-modal-content { padding: 34px 30px; align-self: center; }
+.dish-modal-close { position: absolute; z-index: 2; top: 13px; right: 13px; display: grid; place-items: center; width: 38px; height: 38px; border: 0; border-radius: 50%; background: rgba(255,255,255,.94); color: #39334f; box-shadow: 0 2px 10px #0001; }
+.dish-modal-kicker { color: var(--purple, #7047eb); font-size: 10px; font-weight: 800; letter-spacing: 1.3px; }
+.dish-modal-content h2 { margin: 10px 0 12px; font-size: 27px; line-height: 1.2; }
+.dish-modal-content p { color: var(--muted, #85839c); font-size: 13px; line-height: 1.75; }
+.dish-modal-content h3 { margin: 24px 0 7px; font-size: 15px; }
+.dish-calories { display: flex; flex-direction: column; gap: 7px; margin-top: 24px; padding: 17px; border: 1px solid #e8e0ff; border-radius: 14px; background: #f7f3ff; }
+.dish-calories span { color: #77718f; font-size: 11px; }
+.dish-calories strong { color: #5c39cb; font-size: 20px; }
+.dish-disclaimer { display: block; margin-top: 12px; color: var(--muted, #85839c); font-size: 10px; line-height: 1.5; }
+@media (max-width: 700px) {
+  .dish-art { height: 210px; }
+  .dish-modal { grid-template-columns: 1fr; max-width: 480px; }
+  .dish-modal-image { height: 240px; min-height: 0; max-height: 240px; }
+  .dish-modal-content { padding: 24px; }
+  .dish-modal-content h2 { font-size: 23px; }
+}
+
+/* Centered dish details dialog and full nutrition values */
+.dish-modal-backdrop { position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 24px; overflow-y: auto; }
+.dish-modal { margin: auto; width: min(1040px, 100%); max-height: min(88vh, 900px); }
+.dish-modal-image { min-height: 520px; max-height: 78vh; object-fit: cover; }
+.dish-nutrition { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 9px; margin-top: 12px; }
+.dish-nutrition > div { display: flex; flex-direction: column; gap: 7px; padding: 13px 10px; border: 1px solid #e8e0ff; border-radius: 12px; background: #f7f3ff; }
+.dish-nutrition span { color: #77718f; font-size: 11px; }
+.dish-nutrition strong { color: #5c39cb; font-size: 16px; }
+.auth-switch { display: block; width: 100%; margin-top: 13px; border: 0; background: transparent; color: var(--purple, #7047eb); font: inherit; font-weight: 700; cursor: pointer; }
+.auth-error { padding: 10px 12px; border-radius: 10px; background: #fff0ef; color: #b42318 !important; font-size: 12px !important; }
+@media (max-width: 700px) {
+  .dish-modal-backdrop { padding: 12px; }
+  .dish-modal { max-height: 92vh; }
+  .dish-modal-image { height: 280px; min-height: 0; max-height: 280px; }
+  .dish-nutrition { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* Dish details modal is rendered into document.body so it is centered in the viewport. */
+.dish-modal-backdrop {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 99999 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 24px !important;
+  overflow-y: auto;
+  background: rgba(22, 18, 39, .68);
+  backdrop-filter: blur(5px);
+}
+.dish-modal {
+  margin: auto !important;
+  flex: 0 1 1040px;
+  width: min(1040px, 100%) !important;
+  max-height: min(88vh, 900px) !important;
+  overflow: auto;
+}
+.dish-modal-image { min-height: 520px; max-height: 78vh; object-fit: cover; }
+@media (max-width: 700px) {
+  .dish-modal-backdrop { padding: 12px !important; }
+  .dish-modal { max-height: 92vh !important; }
+  .dish-modal-image { height: 280px; min-height: 0; max-height: 280px; }
+  .dish-nutrition { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }

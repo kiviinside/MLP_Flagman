@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   LayoutDashboard, Truck, ClipboardList, Boxes, Clock3, Ban, Flame, 
   ChartNoAxesCombined, Settings, Bell, Search, Plus, ChevronRight, Menu, X, 
@@ -85,8 +86,10 @@ export default function App() {
   }, [theme]);
   
   const [notificationsOpen, setNotificationsOpen] = useState(false);
-  const [signedIn, setSignedIn] = useState(false);
-  const [login, setLogin] = useState({ email: 'admin@vkusbalans.ru', password: '' });
+  const [signedIn, setSignedIn] = useState(() => { try { return localStorage.getItem('vkus-balans-signed-in') === 'true'; } catch { return false; } });
+  const [authMode, setAuthMode] = useState('login');
+  const [authError, setAuthError] = useState('');
+  const [login, setLogin] = useState({ email: '', password: '', name: '' });
   const [mobileNav, setMobileNav] = useState(false);
   const [search, setSearch] = useState('');
   const [products, setProducts] = useState(seedProducts);
@@ -94,6 +97,7 @@ export default function App() {
   const [supplies, setSupplies] = useState(initialSupplies);
   const [modal, setModal] = useState('');
   const [notice, setNotice] = useState('');
+  const [selectedHotDish, setSelectedHotDish] = useState(null);
   const [filter, setFilter] = useState('Все');
   const [range, setRange] = useState('7 дней');
   const [settings, setSettings] = useState({ alerts: true, autoStop: true, priority: true });
@@ -134,7 +138,7 @@ export default function App() {
     setProducts(p => [...p, { 
       id: Date.now(), 
       name: form.name.trim(), 
-      emoji: '📦', 
+      image: '/images/placeholder.jpg', 
       amount: Number(form.amount), 
       unit: form.unit, 
       expiry: form.expiry || 'Не указано', 
@@ -200,7 +204,7 @@ export default function App() {
             <tr key={p.id}>
               <td>
                 <span className="product-name">
-                  <span className="food-emoji">{p.emoji}</span>
+                  <img className="food-emoji" src={p.image} alt={p.name} />
                   {p.name}
                 </span>
               </td>
@@ -335,7 +339,7 @@ export default function App() {
             <div className="expiry-list">
               {expiring.slice(0, 4).map(p => (
                 <div className="expiry-item" key={p.id}>
-                  <span className="food-emoji">{p.emoji}</span>
+                  <img className="food-emoji" src={p.image} alt={p.name} />
                   <div className="expiry-info">
                     <strong>{p.name}</strong>
                     <small>{p.amount} {p.unit} · до {p.expiry}</small>
@@ -523,8 +527,7 @@ export default function App() {
                   <tr key={p.id}>
                     <td>
                       <span className="product-name">
-                        <span className="food-emoji">{p.emoji}</span>
-                        {p.name}
+                        <img className="food-emoji" src={p.image} alt={p.name} />
                       </span>
                     </td>
                     <td>ПР-{String(201 + i).padStart(3, '0')}</td>
@@ -574,7 +577,7 @@ export default function App() {
                   <tr key={s.name}>
                     <td>
                       <span className="product-name">
-                        <span className="food-emoji">{['🍝', '🥗', '🍰'][i]}</span>
+                        <img className="food-emoji" src={s.image} alt={s.name} />
                         {s.name}
                       </span>
                     </td>
@@ -612,9 +615,11 @@ export default function App() {
         </div>
         <div className="dish-grid">
           {hotDishes.map((d, i) => (
-            <article className="dish-card" key={d.name}>
+            <article className="dish-card dish-card-clickable" key={d.name} onClick={() => setSelectedHotDish(d)} role="button" tabIndex={0} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') setSelectedHotDish(d); }}>
               <div className="dish-art">
-                {d.emoji}
+                {d.image
+                  ? <img className="dish-art-img" src={d.image} alt={d.name} loading="lazy" />
+                  : d.emoji}
                 <span className={`priority priority-${i < 2 ? 'high' : 'medium'}`}>{d.priority}</span>
               </div>
               <div className="dish-body">
@@ -630,6 +635,29 @@ export default function App() {
             </article>
           ))}
         </div>
+        {selectedHotDish && (() => {
+          const details = {
+            'Цезарь с курицей': { description: 'Популярный салат с сочной курицей, хрустящими листьями салата и пикантной заправкой.', ingredients: 'Куриное филе, листья салата, помидоры, сухарики, пармезан, соус «Цезарь».', kcal: 190, protein: 14, fat: 11, carbs: 8 },
+            'Греческий салат': { description: 'Свежий овощной салат с сыром фета и лёгкой заправкой на основе оливкового масла.', ingredients: 'Помидоры, огурцы, сладкий перец, красный лук, сыр фета, маслины, оливковое масло.', kcal: 130, protein: 4, fat: 10, carbs: 6 },
+            'Суп грибной': { description: 'Нежный ароматный грибной суп со сливочным вкусом.', ingredients: 'Шампиньоны, картофель, лук, морковь, сливки или сметана, зелень, соль и перец.', kcal: 65, protein: 2, fat: 4, carbs: 6 },
+            'Пицца Маргарита': { description: 'Классическая пицца с томатным соусом, расплавленной моцареллой и базиликом.', ingredients: 'Тесто, томатный соус, моцарелла, помидоры, базилик, оливковое масло.', kcal: 250, protein: 11, fat: 9, carbs: 31 }
+          }[selectedHotDish.name] || {};
+          return createPortal(<div className="dish-modal-backdrop" onClick={() => setSelectedHotDish(null)}>
+            <section className="dish-modal" role="dialog" aria-modal="true" aria-label={selectedHotDish.name} onClick={e => e.stopPropagation()}>
+              <button className="dish-modal-close" aria-label="Закрыть" onClick={() => setSelectedHotDish(null)}><X size={22} /></button>
+              <img className="dish-modal-image" src={selectedHotDish.image} alt={selectedHotDish.name} />
+              <div className="dish-modal-content">
+                <span className="dish-modal-kicker">ГОРЯЧЕЕ ПРЕДЛОЖЕНИЕ</span>
+                <h2>{selectedHotDish.name}</h2>
+                <p>{details.description}</p>
+                <h3>Ингредиенты</h3>
+                <p>{details.ingredients}</p>
+                <h3>КБЖУ на 100 г</h3><div className="dish-nutrition"><div><span>Калории</span><strong>{details.kcal} ккал</strong></div><div><span>Белки</span><strong>{details.protein} г</strong></div><div><span>Жиры</span><strong>{details.fat} г</strong></div><div><span>Углеводы</span><strong>{details.carbs} г</strong></div></div>
+                <small className="dish-disclaimer">Значения КБЖУ приблизительные на 100 г и зависят от точной рецептуры и количества ингредиентов.</small>
+              </div>
+            </section>
+          </div>, document.body);
+        })()}
       </>
     ); 
   }
@@ -674,7 +702,7 @@ export default function App() {
             <SectionTitle title="Потребность в поставках" subtitle="По текущим остаткам" />
             {products.filter(p => p.amount < 2).map(p => (
               <div className="need-row" key={p.id}>
-                <span className="food-emoji">{p.emoji}</span>
+                <img className="food-emoji" src={p.image} alt={p.name} />
                 <div>
                   <strong>{p.name}</strong>
                   <small>Остаток: {p.amount} {p.unit}</small>
@@ -832,7 +860,7 @@ export default function App() {
             <strong>Алексей Иванов</strong>
             <span>Администратор</span>
           </div>
-          <button className="icon-button" aria-label="Выйти" onClick={() => setSignedIn(false)}>
+          <button className="icon-button" aria-label="Выйти" onClick={() => { setSignedIn(false); try { localStorage.removeItem('vkus-balans-signed-in'); localStorage.removeItem('vkus-balans-current-user'); } catch {} }}>
             <LogOut size={16} />
           </button>
         </div>
@@ -936,38 +964,33 @@ export default function App() {
       
       {!signedIn && (
         <div className="auth-backdrop">
-          <form className="auth-card" onSubmit={e => { e.preventDefault(); setSignedIn(true); notify('Вы вошли в демоверсию'); }}>
-            <div className="auth-logo">
-              <ChefHat size={30} />
-            </div>
+          <form className="auth-card" onSubmit={e => {
+            e.preventDefault(); setAuthError('');
+            const email = login.email.trim().toLowerCase();
+            let users = [];
+            try { users = JSON.parse(localStorage.getItem('vkus-balans-users') || '[]'); } catch {}
+            if (authMode === 'register') {
+              if (!login.name.trim()) { setAuthError('Введите имя.'); return; }
+              if (users.some(u => u.email === email)) { setAuthError('Аккаунт с такой почтой уже существует. Войдите.'); return; }
+              users.push({ name: login.name.trim(), email, password: login.password });
+              try { localStorage.setItem('vkus-balans-users', JSON.stringify(users)); } catch {}
+            } else if (!users.some(u => u.email === email && u.password === login.password)) {
+              setAuthError('Неверная почта или пароль. Если вы впервые здесь, создайте аккаунт.'); return;
+            }
+            try { localStorage.setItem('vkus-balans-signed-in', 'true'); localStorage.setItem('vkus-balans-current-user', email); } catch {}
+            setSignedIn(true); notify(authMode === 'register' ? 'Аккаунт создан' : 'Вы вошли в систему');
+          }}>
+            <div className="auth-logo"><ChefHat size={30} /></div>
             <span className="eyebrow">ВКУС&БАЛАНС</span>
-            <h1>С возвращением!</h1>
-            <p>Войдите, чтобы управлять рестораном.</p>
-            <label>
-              Электронная почта
-              <input 
-                type="email" 
-                required 
-                value={login.email} 
-                onChange={e => setLogin(v => ({ ...v, email: e.target.value }))} 
-                placeholder="name@example.com" 
-              />
-            </label>
-            <label>
-              Пароль
-              <input 
-                type="password" 
-                required 
-                minLength={4} 
-                value={login.password} 
-                onChange={e => setLogin(v => ({ ...v, password: e.target.value }))} 
-                placeholder="Введите пароль" 
-              />
-            </label>
-            <button className="button primary full" type="submit">
-              Войти в систему
-            </button>
-            <small>Демо-режим: форма проверяет заполнение, серверная авторизация пока не подключена.</small>
+            <h1>{authMode === 'register' ? 'Создать аккаунт' : 'С возвращением!'}</h1>
+            <p>{authMode === 'register' ? 'Зарегистрируйтесь для управления рестораном.' : 'Войдите, чтобы управлять рестораном.'}</p>
+            {authMode === 'register' && <label>Ваше имя<input type="text" required value={login.name} onChange={e => setLogin(v => ({ ...v, name: e.target.value }))} placeholder="Как к вам обращаться" /></label>}
+            <label>Электронная почта<input type="email" required value={login.email} onChange={e => setLogin(v => ({ ...v, email: e.target.value }))} placeholder="name@example.com" /></label>
+            <label>Пароль<input type="password" required minLength={4} value={login.password} onChange={e => setLogin(v => ({ ...v, password: e.target.value }))} placeholder="Минимум 4 символа" /></label>
+            {authError && <p className="auth-error" role="alert">{authError}</p>}
+            <button className="button primary full" type="submit">{authMode === 'register' ? 'Зарегистрироваться' : 'Войти в систему'}</button>
+            <button className="auth-switch" type="button" onClick={() => { setAuthMode(authMode === 'login' ? 'register' : 'login'); setAuthError(''); }}>{authMode === 'register' ? 'Уже есть аккаунт? Войти' : 'Нет аккаунта? Зарегистрироваться'}</button>
+            <small>Демо-версия: данные аккаунта хранятся в этом браузере. Для настоящей защиты нужен сервер авторизации.</small>
           </form>
         </div>
       )}
@@ -1041,7 +1064,7 @@ export default function App() {
                 <div className="order-dish-list">
                   {menuDishes.map(dish => (
                     <article className={`order-dish ${selectedDishes[dish.id] ? 'is-selected' : ''}`} key={dish.id}>
-                      <div className="order-dish-emoji">{dish.emoji}</div>
+                     <img className="order-dish-emoji" src={dish.image} alt={dish.name} />
                       <div className="order-dish-info">
                         <strong>{dish.name}</strong>
                         <small>{money(dish.price)} · {dish.priority}</small>
