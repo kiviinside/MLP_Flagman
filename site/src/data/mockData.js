@@ -7,7 +7,7 @@ export const products = [
   { id: 6, name: 'Яйца', image: '/images/eggs.jpg', amount: 15, unit: 'шт', expiry: '30.04.2025', days: 8, category: 'Другое' },
   { id: 7, name: 'Молоко', image: '/images/milk.jpg', amount: 4.5, unit: 'л', expiry: '26.04.2025', days: 4, category: 'Молочные продукты' },
   { id: 8, name: 'Мука', image: '/images/muka.jpg', amount: 10, unit: 'кг', expiry: '12.06.2025', days: 50, category: 'Другое' },
-  { id: 1, name: 'Огурцы', image: '/images/cucumber.jpg', amount: 12.5, unit: 'кг', expiry: '25.04.2025', days: 3, category: 'Овощи' },
+  { id: 9, name: 'Огурцы', image: '/images/cucumber.jpg', amount: 12.5, unit: 'кг', expiry: '25.04.2025', days: 3, category: 'Овощи' },
 ];
 export const initialOrders = [
   { id: 2087, date: '23.04.2025', dishes: 3, status: 'В обработке', amount: 3340 },
@@ -17,11 +17,11 @@ export const initialOrders = [
   { id: 2083, date: '21.04.2025', dishes: 6, status: 'Отменён', amount: 0 },
 ];
 export const initialSupplies = [
-  { id: 1034, supplier: 'ООО «ФудПлюс»', date: '23.04.2025', amount: 46320, status: 'Доставлена' },
-  { id: 1033, supplier: 'АгроСнаб', date: '20.04.2025', amount: 32500, status: 'Доставлена' },
-  { id: 1032, supplier: 'КулинарТорг', date: '17.04.2025', amount: 28750, status: 'Доставлена' },
-  { id: 1031, supplier: 'Молочные реки', date: '14.04.2025', amount: 59800, status: 'В пути' },
-  { id: 1030, supplier: 'ООО «Овощи»', date: '10.04.2025', amount: 21400, status: 'Доставлена' },
+  { id: 1034, supplier: 'ООО «ФудПлюс»', date: '23.04.2025', amount: 46320, status: 'Доставлена', items: [{ name: 'Куриное филе', quantity: 20, unit: 'кг', expiry: '30.04.2025' }, { name: 'Помидоры', quantity: 15, unit: 'кг', expiry: '28.04.2025' }] },
+  { id: 1033, supplier: 'АгроСнаб', date: '20.04.2025', amount: 32500, status: 'Доставлена', items: [{ name: 'Огурцы', quantity: 12, unit: 'кг', expiry: '27.04.2025' }, { name: 'Листья салата', quantity: 5, unit: 'кг', expiry: '24.04.2025' }] },
+  { id: 1032, supplier: 'КулинарТорг', date: '17.04.2025', amount: 28750, status: 'Доставлена', items: [{ name: 'Сыр моцарелла', quantity: 8, unit: 'кг', expiry: '02.05.2025' }, { name: 'Мука', quantity: 25, unit: 'кг', expiry: '12.06.2025' }] },
+  { id: 1031, supplier: 'Молочные реки', date: '14.04.2025', amount: 59800, status: 'В пути', items: [{ name: 'Молоко', quantity: 30, unit: 'л', expiry: '29.04.2025' }, { name: 'Сметана', quantity: 12, unit: 'кг', expiry: '25.04.2025' }] },
+  { id: 1030, supplier: 'ООО «Овощи»', date: '10.04.2025', amount: 21400, status: 'Доставлена', items: [{ name: 'Помидоры', quantity: 18, unit: 'кг', expiry: '18.04.2025' }, { name: 'Огурцы', quantity: 14, unit: 'кг', expiry: '19.04.2025' }] },
 ];
 export const dishes = [
   { name: 'Цезарь с курицей', image: '/images/cezar.jpg', reason: 'Куриное филе и листья салата скоро истекают', priority: 'Высокий приоритет' },

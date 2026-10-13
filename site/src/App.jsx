@@ -22,6 +22,9 @@ const nav = [
 ];
 
 const money = n => new Intl.NumberFormat('ru-RU').format(n) + ' ₽';
+const readStorage = (key, fallback) => { try { const value = localStorage.getItem(key); return value ? JSON.parse(value) : fallback; } catch { return fallback; } };
+const DEMO_ADMIN = { name: 'Администратор', email: 'admin@vkusbalans.ru', password: '', role: 'admin' };
+const getInitialUsers = () => { const users = readStorage('vkus-balans-users', null); if (!users || !users.length) { try { localStorage.setItem('vkus-balans-users', JSON.stringify([DEMO_ADMIN])); } catch {} return [DEMO_ADMIN]; } if (!users.some(u => u.role === 'admin')) users[0].role = 'admin'; const admin = users.find(u => u.role === 'admin'); if (admin && admin.email.toLowerCase() === DEMO_ADMIN.email) admin.password = ''; try { localStorage.setItem('vkus-balans-users', JSON.stringify(users)); } catch {} return users; };
 
 function Status({ children, tone }) { 
   return (
@@ -90,11 +93,18 @@ export default function App() {
   const [authMode, setAuthMode] = useState('login');
   const [authError, setAuthError] = useState('');
   const [login, setLogin] = useState({ email: '', password: '', name: '' });
+  const [users, setUsers] = useState(getInitialUsers);
+  const [currentUser, setCurrentUser] = useState(() => { const email = (() => { try { return localStorage.getItem('vkus-balans-current-user'); } catch { return ''; } })(); return getInitialUsers().find(u => u.email === email) || null; });
+  const [newUser, setNewUser] = useState({ name: '', email: '', password: '', role: 'employee' });
+  const [supplyForm, setSupplyForm] = useState({ supplier: '', items: [{ productId: '', name: '', quantity: '', unit: 'кг', expiry: '' }] });
   const [mobileNav, setMobileNav] = useState(false);
   const [search, setSearch] = useState('');
-  const [products, setProducts] = useState(seedProducts);
-  const [orders, setOrders] = useState(initialOrders);
-  const [supplies, setSupplies] = useState(initialSupplies);
+  const [products, setProducts] = useState(() => readStorage('vkus-balans-products', seedProducts));
+  const [orders, setOrders] = useState(() => readStorage('vkus-balans-orders', initialOrders));
+  const [supplies, setSupplies] = useState(() => readStorage('vkus-balans-supplies', initialSupplies));
+  useEffect(() => { try { localStorage.setItem('vkus-balans-products', JSON.stringify(products)); } catch {} }, [products]);
+  useEffect(() => { try { localStorage.setItem('vkus-balans-orders', JSON.stringify(orders)); } catch {} }, [orders]);
+  useEffect(() => { try { localStorage.setItem('vkus-balans-supplies', JSON.stringify(supplies)); } catch {} }, [supplies]);
   const [modal, setModal] = useState('');
   const [notice, setNotice] = useState('');
   const [selectedHotDish, setSelectedHotDish] = useState(null);
@@ -138,7 +148,7 @@ export default function App() {
     setProducts(p => [...p, { 
       id: Date.now(), 
       name: form.name.trim(), 
-      image: '/images/placeholder.jpg', 
+      image: '/images/placeholder.svg', 
       amount: Number(form.amount), 
       unit: form.unit, 
       expiry: form.expiry || 'Не указано', 
@@ -168,22 +178,48 @@ export default function App() {
     notify(`Заказ №${id} создан`); 
   };
   
-  const addSupply = () => { 
-    const id = Math.max(...supplies.map(s => s.id), 1000) + 1; 
-    setSupplies([{ 
-      id, 
-      supplier: 'Новая поставка', 
-      date: new Date().toLocaleDateString('ru-RU'), 
-      amount: 0, 
-      status: 'Ожидает' 
-    }, ...supplies]); 
-    setModal(''); 
-    notify(`Поставка №${id} зарегистрирована`); 
+  const addSupply = e => {
+    e?.preventDefault?.();
+    const validItems = supplyForm.items.filter(item => item.productId || item.name.trim());
+    if (!supplyForm.supplier.trim()) { notify('Укажите поставщика'); return; }
+    if (!validItems.length || validItems.some(item => Number(item.quantity) <= 0 || !item.expiry || (!item.productId && !item.name.trim()))) {
+      notify('Добавьте продукты, количество и срок годности для каждой позиции'); return;
+    }
+    const id = Math.max(...supplies.map(s => s.id), 1000) + 1;
+    const receivedItems = validItems.map((item, index) => {
+      const existing = products.find(p => String(p.id) === String(item.productId));
+      const name = existing?.name || item.name.trim();
+      const unit = existing?.unit || item.unit;
+      const quantity = Number(item.quantity);
+      const expiryDate = new Date(`${item.expiry}T00:00:00`);
+      const days = Math.ceil((expiryDate.getTime() - new Date(new Date().toDateString()).getTime()) / 86400000);
+      const newBatch = { id: Date.now() + index, name, image: existing?.image || '/images/placeholder.jpg', amount: quantity, unit, expiry: new Date(`${item.expiry}T00:00:00`).toLocaleDateString('ru-RU'), days, category: existing?.category || 'Другое', batchSupplyId: id };
+      return { name, quantity, unit, expiry: newBatch.expiry, productId: newBatch.id, batch: newBatch };
+    });
+    setProducts(prev => [...receivedItems.map(item => item.batch), ...prev]);
+    setSupplies(prev => [{ id, supplier: supplyForm.supplier.trim(), date: new Date().toLocaleDateString('ru-RU'), amount: 0, status: 'Доставлена', items: receivedItems.map(({ batch, ...item }) => item) }, ...prev]);
+    setSupplyForm({ supplier: '', items: [{ productId: '', name: '', quantity: '', unit: 'кг', expiry: '' }] });
+    setModal('');
+    notify(`Поставка №${id} зарегистрирована: ${receivedItems.length} позиций добавлено на склад`);
   };
-  
+
+  const addSupplyLine = () => setSupplyForm(f => ({ ...f, items: [...f.items, { productId: '', name: '', quantity: '', unit: 'кг', expiry: '' }] }));
+  const updateSupplyLine = (index, key, value) => setSupplyForm(f => ({ ...f, items: f.items.map((item, i) => i === index ? { ...item, [key]: value, ...(key === 'productId' && value ? { name: '' } : {}) } : item) }));
+  const registerUser = e => {
+    e.preventDefault();
+    const email = newUser.email.trim().toLowerCase();
+    if (!newUser.name.trim() || !email) { notify('Укажите имя и корректную электронную почту'); return; }
+    if (users.some(user => user.email.toLowerCase() === email)) { notify('Пользователь с такой почтой уже существует'); return; }
+    const updated = [...users, { ...newUser, name: newUser.name.trim(), email }];
+    setUsers(updated); try { localStorage.setItem('vkus-balans-users', JSON.stringify(updated)); } catch {}
+    setNewUser({ name: '', email: '', password: '', role: 'employee' });
+    notify('Пользователь зарегистрирован администратором');
+  };
+
   const openModal = type => { 
     setModal(type); 
-    setForm({ name: '', amount: '', unit: 'кг', expiry: '' }); 
+    setForm({ name: '', amount: '', unit: 'кг', expiry: '' });
+    if (type === 'supply') setSupplyForm({ supplier: '', items: [{ productId: '', name: '', quantity: '', unit: 'кг', expiry: '' }] });
   };
 
   const tableProducts = (
@@ -274,13 +310,16 @@ export default function App() {
         </thead>
         <tbody>
           {supplies.map(s => (
-            <tr key={s.id}>
-              <td className="purple-text">#{s.id}</td>
-              <td>{s.supplier}</td>
-              <td>{s.date}</td>
-              <td className="strong-cell">{money(s.amount)}</td>
-              <td><Status>{s.status}</Status></td>
-            </tr>
+            <React.Fragment key={s.id}>
+              <tr>
+                <td className="purple-text">#{s.id}</td>
+                <td>{s.supplier}</td>
+                <td>{s.date}</td>
+                <td className="strong-cell">{s.amount ? money(s.amount) : "—"}</td>
+                <td><Status>{s.status}</Status></td>
+              </tr>
+              <tr className="supply-items-row"><td colSpan="5"><strong>Состав поставки:</strong>{s.items?.length ? <div className="supply-item-chips">{s.items.map((item, i) => <span key={`${s.id}-${i}`}>{item.name} — {item.quantity} {item.unit}, годен до {item.expiry}</span>)}</div> : <span className="muted-inline">Состав для старых демонстрационных записей не указан</span>}</td></tr>
+            </React.Fragment>
           ))}
         </tbody>
       </table>
@@ -710,9 +749,9 @@ export default function App() {
                 <Status tone="amber">Пополнить</Status>
               </div>
             ))}
-            <button className="button primary full" onClick={() => openModal('supply')}>
+            {currentUser?.role === 'admin' && <button className="button primary full" onClick={() => openModal('supply')}>
               <Plus size={16} /> Создать поставку
-            </button>
+            </button>}
           </section>
         </div>
       </>
@@ -766,6 +805,17 @@ export default function App() {
               ))}
             </div>
           </div>
+          {currentUser?.role === 'admin' && <section className="admin-users-panel">
+            <div className="admin-users-heading"><div><strong>Управление пользователями</strong><p>Создавать аккаунты сотрудников может только администратор.</p></div><Status tone="purple">Администратор</Status></div>
+            <form className="admin-user-form" onSubmit={registerUser}>
+              <label>Имя<input required value={newUser.name} onChange={e => setNewUser(v => ({ ...v, name: e.target.value }))} placeholder="Имя сотрудника" /></label>
+              <label>Электронная почта<input required type="email" value={newUser.email} onChange={e => setNewUser(v => ({ ...v, email: e.target.value }))} placeholder="employee@example.com" /></label>
+              <label>Пароль <span className="optional-field">не задаётся на этапе прототипа</span><input type="password" value={newUser.password} onChange={e => setNewUser(v => ({ ...v, password: e.target.value }))} placeholder="Настроит backend" autoComplete="new-password" /></label>
+              <label>Роль<select value={newUser.role} onChange={e => setNewUser(v => ({ ...v, role: e.target.value }))}><option value="employee">Сотрудник</option><option value="admin">Администратор</option></select></label>
+              <button className="button primary" type="submit"><Plus size={16} /> Зарегистрировать</button>
+            </form>
+            <div className="admin-users-list">{users.map(user => <div className="admin-user-row" key={user.email}><span><strong>{user.name}</strong><small>{user.email}</small></span><Status tone={user.role === 'admin' ? 'purple' : 'green'}>{user.role === 'admin' ? 'Администратор' : 'Сотрудник'}</Status></div>)}</div>
+          </section>}
           <div className="settings-info">
             <CircleHelp size={19} />
             <div>
@@ -780,7 +830,7 @@ export default function App() {
 
   const pageContent = () => { 
     switch(active) { 
-      case 'Главная': return <Dashboard />; 
+      case 'Главная': return Dashboard(); 
       case 'Поставки': return (
         <>
           <SectionTitle title="Поставки" subtitle="История поступления товаров и учёт партий продуктов." />
@@ -788,9 +838,9 @@ export default function App() {
             <div className="toolbar-note">
               <Truck size={18} /> Все поступления ресторана
             </div>
-            <button className="button primary" onClick={() => openModal('supply')}>
+            {currentUser?.role === 'admin' && <button className="button primary" onClick={() => openModal('supply')}>
               <Plus size={16} /> Новая поставка
-            </button>
+            </button>}
           </div>
           <section className="panel">
             {suppliesTable}
@@ -813,13 +863,13 @@ export default function App() {
           </section>
         </>
       ); 
-      case 'Склад': return <Warehouse />; 
-      case 'Сроки годности': return <Expiry />; 
-      case 'Стоп-лист': return <StopList />; 
-      case 'Горячие предложения': return <HotOffers />; 
-      case 'Аналитика': return <Analytics />; 
-      case 'Настройки': return <SettingsPage />; 
-      default: return <Dashboard />; 
+      case 'Склад': return Warehouse(); 
+      case 'Сроки годности': return Expiry(); 
+      case 'Стоп-лист': return StopList(); 
+      case 'Горячие предложения': return HotOffers(); 
+      case 'Аналитика': return Analytics(); 
+      case 'Настройки': return SettingsPage(); 
+      default: return Dashboard(); 
     } 
   };
 
@@ -831,7 +881,7 @@ export default function App() {
             <ChefHat size={26} />
           </div>
           <div>
-            <strong>Вкус&Баланс</strong>
+            <strong>MLP</strong>
             <span>Управление рестораном</span>
           </div>
           <button className="close-nav icon-button" onClick={() => setMobileNav(false)} aria-label="Закрыть меню">
@@ -860,7 +910,7 @@ export default function App() {
             <strong>Алексей Иванов</strong>
             <span>Администратор</span>
           </div>
-          <button className="icon-button" aria-label="Выйти" onClick={() => { setSignedIn(false); try { localStorage.removeItem('vkus-balans-signed-in'); localStorage.removeItem('vkus-balans-current-user'); } catch {} }}>
+          <button className="icon-button" aria-label="Выйти" onClick={() => { setSignedIn(false); setCurrentUser(null); try { localStorage.removeItem('vkus-balans-signed-in'); localStorage.removeItem('vkus-balans-current-user'); } catch {} }}>
             <LogOut size={16} />
           </button>
         </div>
@@ -904,10 +954,10 @@ export default function App() {
           </div>
         </header>
         
-        <div className="page-content" key={active}>
+        <div className="page-content">
           {pageContent()}
           <footer className="footer">
-            <span>© {today.getFullYear()} Вкус&Баланс</span>
+            <span>© {today.getFullYear()} MLP</span>
             <span>Контроль запасов с заботой о качестве <span className="footer-heart">♥</span></span>
           </footer>
         </div>
@@ -967,30 +1017,24 @@ export default function App() {
           <form className="auth-card" onSubmit={e => {
             e.preventDefault(); setAuthError('');
             const email = login.email.trim().toLowerCase();
-            let users = [];
-            try { users = JSON.parse(localStorage.getItem('vkus-balans-users') || '[]'); } catch {}
-            if (authMode === 'register') {
-              if (!login.name.trim()) { setAuthError('Введите имя.'); return; }
-              if (users.some(u => u.email === email)) { setAuthError('Аккаунт с такой почтой уже существует. Войдите.'); return; }
-              users.push({ name: login.name.trim(), email, password: login.password });
-              try { localStorage.setItem('vkus-balans-users', JSON.stringify(users)); } catch {}
-            } else if (!users.some(u => u.email === email && u.password === login.password)) {
-              setAuthError('Неверная почта или пароль. Если вы впервые здесь, создайте аккаунт.'); return;
-            }
+            const storedUsers = getInitialUsers();
+            if (authMode === 'register') { setAuthError('Регистрация доступна только администратору после входа в систему.'); return; }
+            const foundUser = storedUsers.find(u => u.email.toLowerCase() === email && (u.role === 'admin' ? !login.password.trim() : u.password === login.password));
+            if (!foundUser) { setAuthError('Неверная почта или пароль.'); return; }
+            setCurrentUser(foundUser);
             try { localStorage.setItem('vkus-balans-signed-in', 'true'); localStorage.setItem('vkus-balans-current-user', email); } catch {}
-            setSignedIn(true); notify(authMode === 'register' ? 'Аккаунт создан' : 'Вы вошли в систему');
+            setSignedIn(true); notify('Вы вошли в систему');
           }}>
             <div className="auth-logo"><ChefHat size={30} /></div>
-            <span className="eyebrow">ВКУС&БАЛАНС</span>
+            <span className="eyebrow">MLP</span>
             <h1>{authMode === 'register' ? 'Создать аккаунт' : 'С возвращением!'}</h1>
-            <p>{authMode === 'register' ? 'Зарегистрируйтесь для управления рестораном.' : 'Войдите, чтобы управлять рестораном.'}</p>
-            {authMode === 'register' && <label>Ваше имя<input type="text" required value={login.name} onChange={e => setLogin(v => ({ ...v, name: e.target.value }))} placeholder="Как к вам обращаться" /></label>}
-            <label>Электронная почта<input type="email" required value={login.email} onChange={e => setLogin(v => ({ ...v, email: e.target.value }))} placeholder="name@example.com" /></label>
-            <label>Пароль<input type="password" required minLength={4} value={login.password} onChange={e => setLogin(v => ({ ...v, password: e.target.value }))} placeholder="Минимум 4 символа" /></label>
+            <p>Войдите в систему. Регистрацию сотрудников выполняет администратор.</p>
+            <p className="auth-admin-note">Демо-доступ администратора: <strong>admin@vkusbalans.ru</strong>, пароль не требуется.</p>
+                        <label>Электронная почта<input type="email" required value={login.email} onChange={e => setLogin(v => ({ ...v, email: e.target.value }))} placeholder="name@example.com" /></label>
+            <label>Пароль<input type="password" value={login.password} onChange={e => setLogin(v => ({ ...v, password: e.target.value }))} placeholder="Минимум 4 символа" /></label>
             {authError && <p className="auth-error" role="alert">{authError}</p>}
-            <button className="button primary full" type="submit">{authMode === 'register' ? 'Зарегистрироваться' : 'Войти в систему'}</button>
-            <button className="auth-switch" type="button" onClick={() => { setAuthMode(authMode === 'login' ? 'register' : 'login'); setAuthError(''); }}>{authMode === 'register' ? 'Уже есть аккаунт? Войти' : 'Нет аккаунта? Зарегистрироваться'}</button>
-            <small>Демо-версия: данные аккаунта хранятся в этом браузере. Для настоящей защиты нужен сервер авторизации.</small>
+            <button className="button primary full" type="submit">Войти в систему</button>
+            <small>Демо-режим: учётные записи хранятся в этом браузере. Для защиты в рабочей системе требуется серверная авторизация.</small>
           </form>
         </div>
       )}
@@ -1000,7 +1044,7 @@ export default function App() {
           <section className="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
             <div className="modal-head">
               <div>
-                <span className="eyebrow">ВКУС&БАЛАНС</span>
+                <span className="eyebrow">MLP</span>
                 <h2 id="modal-title">
                   {modal === 'product' ? 'Добавить продукт' : modal === 'order' ? 'Новый заказ' : 'Новая поставка'}
                 </h2>
@@ -1103,18 +1147,26 @@ export default function App() {
                 </button>
               </div>
             ) : (
-              <div className="modal-form">
-                <div className="modal-illustration">
-                  <PackagePlus size={28} />
-                </div>
-                <p>Будет создана запись поставки. Состав партий и сроки годности можно будет получать из API.</p>
-                <button className="button primary full" onClick={addSupply}>
-                  <Check size={16} /> Зарегистрировать поставку
-                </button>
-                <button className="button secondary full" onClick={() => setModal('')}>
-                  Отмена
-                </button>
-              </div>
+              <form className="modal-form supply-form" onSubmit={addSupply}>
+                <label>Поставщик<input required value={supplyForm.supplier} onChange={e => setSupplyForm(f => ({ ...f, supplier: e.target.value }))} placeholder="Например, ООО «ФудПлюс»" /></label>
+                <div className="supply-lines-heading"><div><strong>Продукты в поставке</strong><p>Выберите продукт со склада или добавьте новый. Для каждой партии укажите количество и срок годности.</p></div><button type="button" className="button secondary small" onClick={addSupplyLine}><Plus size={15} /> Добавить строку</button></div>
+                {supplyForm.items.map((item, index) => {
+                  const chosenProduct = products.find(p => String(p.id) === String(item.productId));
+                  return <div className="supply-line supply-line-card" key={index}>
+                    <div className="supply-card-top">
+                      <div className="supply-product-thumb">{chosenProduct?.image ? <img src={chosenProduct.image} alt="" /> : <PackagePlus size={24} />}</div>
+                      <div className="supply-line-title"><strong>Продукт {index + 1}</strong><span>{item.productId ? 'Из каталога' : 'Новая позиция'}</span></div>
+                      {supplyForm.items.length > 1 && <button type="button" className="icon-button supply-delete" aria-label="Удалить позицию" onClick={() => setSupplyForm(f => ({ ...f, items: f.items.filter((_, i) => i !== index) }))}><Trash2 size={16} /></button>}
+                    </div>
+                    <label>Продукт из каталога<select value={item.productId} onChange={e => updateSupplyLine(index, 'productId', e.target.value)}><option value="">＋ Добавить новый продукт</option>{products.filter((p, i, arr) => arr.findIndex(x => x.name.toLowerCase() === p.name.toLowerCase()) === i).map(p => <option key={p.id} value={String(p.id)}>{p.name} ({p.unit})</option>)}</select></label>
+                    {!item.productId && <div className="form-row"><label>Название нового продукта<input required value={item.name} onChange={e => updateSupplyLine(index, 'name', e.target.value)} placeholder="Например, Клубника" /></label><label>Единица измерения<select value={item.unit} onChange={e => updateSupplyLine(index, 'unit', e.target.value)}><option>кг</option><option>г</option><option>л</option><option>шт</option></select></label></div>}
+                    <div className="form-row"><label>Количество<input type="number" required min="0.01" step="0.01" value={item.quantity} onChange={e => updateSupplyLine(index, 'quantity', e.target.value)} placeholder="Например, 5" /></label><label>Срок годности<input type="date" required value={item.expiry} onChange={e => updateSupplyLine(index, 'expiry', e.target.value)} /></label></div>
+                  </div>;
+                })}
+                <p className="form-hint">Каждая позиция попадёт в состав поставки и будет зарегистрирована отдельной партией на складе.</p>
+                <button className="button primary full" type="submit"><Check size={16} /> Принять поставку</button>
+                <button type="button" className="button secondary full" onClick={() => setModal('')}>Отмена</button>
+              </form>
             )}
           </section>
         </div>

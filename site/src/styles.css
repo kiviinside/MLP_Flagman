@@ -3904,3 +3904,110 @@ html[data-theme="dark"] .search-box input::placeholder {
   .dish-modal-image { height: 280px; min-height: 0; max-height: 280px; }
   .dish-nutrition { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+/* Состав поставки и управление пользователями */
+.supply-items-row td { background: var(--surface, #faf8ff); padding-top: 10px; padding-bottom: 13px; }
+.supply-items-row td > strong { display: block; margin-bottom: 8px; font-size: 12px; }
+.supply-item-chips { display: flex; flex-wrap: wrap; gap: 7px; }
+.supply-item-chips span { display: inline-flex; padding: 6px 9px; border: 1px solid var(--line, #e6e0f4); background: #fff; border-radius: 8px; color: #51486d; font-size: 12px; }
+.muted-inline { color: #827b96; font-size: 12px; }
+.supply-form { max-height: min(75vh, 760px); overflow-y: auto; }
+.supply-lines-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 4px 0 2px; }
+.supply-lines-heading strong, .admin-users-heading strong { display: block; font-size: 14px; }
+.supply-lines-heading p, .admin-users-heading p { margin: 5px 0 0; color: var(--muted, #696581); font-size: 12px; line-height: 1.45; }
+.supply-line { border: 1px solid var(--line, #e6e0f4); border-radius: 12px; padding: 13px; display: grid; gap: 11px; background: #fcfbff; }
+.supply-line-title { display: flex; align-items: center; justify-content: space-between; }
+.supply-line-title strong { font-size: 12px; color: #6750a4; }
+.supply-form .form-row { margin: 0; }
+.admin-users-panel { border-top: 1px solid var(--line, #e6e0f4); margin-top: 22px; padding-top: 22px; }
+.admin-users-heading { display: flex; justify-content: space-between; align-items: flex-start; gap: 15px; margin-bottom: 17px; }
+.admin-user-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 13px; align-items: end; }
+.admin-user-form label { display: grid; gap: 7px; font-size: 12px; font-weight: 600; color: var(--text, #302747); }
+.admin-user-form input, .admin-user-form select { width: 100%; min-width: 0; border: 1px solid var(--line, #e6e0f4); border-radius: 9px; padding: 10px 11px; background: var(--input-bg, #fff); color: inherit; font: inherit; }
+.admin-user-form .button { min-height: 39px; }
+.admin-users-list { display: grid; gap: 8px; margin-top: 17px; }
+.admin-user-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 12px; border: 1px solid var(--line, #e6e0f4); border-radius: 10px; }
+.admin-user-row > span { display: grid; gap: 4px; min-width: 0; }
+.admin-user-row strong { font-size: 12px; }
+.admin-user-row small { color: var(--muted, #696581); overflow-wrap: anywhere; }
+.auth-admin-note { margin: 2px 0; padding: 11px 12px; border-radius: 10px; background: #f4f0ff; color: #5d4a89; font-size: 11px; line-height: 1.6; }
+@media(max-width: 620px) {
+  .supply-lines-heading { align-items: flex-start; flex-direction: column; }
+  .admin-user-form { grid-template-columns: 1fr; }
+  .supply-item-chips span { width: 100%; }
+}
+
+/* Улучшенная читаемость настроек и стабильный ввод в форме пользователей */
+.admin-users-panel { color: var(--text, #f3f0ff); }
+.admin-users-heading strong { color: var(--text, #f3f0ff); font-size: 16px; letter-spacing: -.01em; }
+.admin-users-heading p { color: var(--muted, #b8b2ca); font-size: 14px; }
+.admin-user-form label { color: var(--text, #e9e5f5); font-size: 13px; }
+.admin-user-form input, .admin-user-form select {
+  color: var(--text, #f5f2ff); background: var(--input-bg, #292437); border-color: var(--line, #514960);
+  min-height: 44px; outline: none; transition: border-color .15s ease, box-shadow .15s ease;
+}
+.admin-user-form input::placeholder { color: #aaa3bd; opacity: 1; }
+.admin-user-form input:focus, .admin-user-form select:focus {
+  border-color: #9b7cff; box-shadow: 0 0 0 3px rgba(123, 83, 255, .2);
+}
+.admin-user-form input, .admin-user-form select { scroll-margin-top: 100px; }
+.admin-user-form label { min-width: 0; }
+.admin-user-form .button { align-self: end; min-height: 44px; }
+.admin-user-row { color: var(--text, #f3f0ff); background: var(--surface, #282436); }
+.admin-user-row small { color: var(--muted, #b8b2ca); }
+
+/* Читаемые формы настроек и карточки позиций поставки (вариант B) */
+html[data-theme="dark"] .admin-users-panel,
+html[data-theme="dark"] .admin-users-panel * { color: #f4f1ff; }
+html[data-theme="dark"] .admin-users-heading p { color: #c2bdd5; }
+html[data-theme="dark"] .admin-user-form label { color: #e7e2f7; }
+html[data-theme="dark"] .admin-user-form input,
+html[data-theme="dark"] .admin-user-form select { background: #171426; color: #fff; border-color: #554b70; }
+html[data-theme="dark"] .admin-user-form input::placeholder { color: #aaa2c3; }
+html[data-theme="dark"] .admin-user-row { background: #211c32; border-color: #403653; }
+html[data-theme="dark"] .admin-user-row small { color: #c4bdd8; }
+html[data-theme="dark"] .optional-field { color: #c0b6dc; font-size: 11px; font-weight: 400; }
+html[data-theme="light"] .optional-field { color: #706783; font-size: 11px; font-weight: 400; }
+.supply-line-card { background: var(--surface, #211c32); border-color: var(--line, #454052); padding: 16px; gap: 14px; box-shadow: 0 8px 22px rgba(10,7,25,.12); }
+.supply-line-card .supply-line-title { padding-bottom: 10px; border-bottom: 1px solid var(--line, #454052); }
+.supply-line-card .supply-line-title strong { font-size: 14px; color: var(--text, #f3f0ff); }
+.supply-line-card label { color: var(--text, #f3f0ff); font-size: 12px; font-weight: 600; }
+.supply-line-card input, .supply-line-card select { min-height: 42px; width: 100%; min-width: 0; background: var(--input-bg, #171426); color: var(--text, #f3f0ff); border: 1px solid var(--line, #514960); border-radius: 10px; padding: 10px 12px; }
+.supply-line-card input:focus, .supply-line-card select:focus { outline: 0; border-color: #9877ff; box-shadow: 0 0 0 3px rgba(123,83,255,.17); }
+.supply-line-card .form-row { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 12px; }
+.supply-line-card .supply-line-title .icon-button { color: #ff8b9d; }
+@media(max-width:560px) { .supply-line-card .form-row { grid-template-columns: 1fr; } }
+
+/* Final readability pass: stronger contrast for settings and form labels */
+.admin-users-panel { color: #f4f1ff; }
+.admin-users-heading p { color: #c9c3dc !important; }
+.admin-user-form label { color: #e9e4fa !important; }
+.admin-user-form input, .admin-user-form select { color: #fff !important; background: #171426 !important; border-color: #5d5277 !important; }
+.admin-user-form input::placeholder { color: #b8afcf !important; opacity: 1; }
+.admin-user-form input:focus, .admin-user-form select:focus { border-color: #9b7cff !important; box-shadow: 0 0 0 3px rgba(123,83,255,.24); }
+.admin-users-panel .status { color: #eee8ff !important; }
+.supply-line-card { background: linear-gradient(145deg, #211c36, #19162a) !important; border-color: #484064 !important; border-radius: 16px !important; }
+.supply-line-card .supply-line-title strong { color: #f5f1ff !important; }
+.supply-line-card label { color: #ddd6f4 !important; }
+.supply-line-card input, .supply-line-card select { color: #fff !important; background: #151222 !important; border-color: #51466d !important; }
+.supply-line-card input::placeholder { color: #aaa0c6; }
+.supply-lines-heading p { color: #c5bedb !important; }
+
+/* MLP branding and polished variant B supply cards */
+.brand strong { letter-spacing: -.025em; }
+.supply-form { display: grid; gap: 16px; }
+.supply-line-card { position: relative; display: grid; gap: 15px; padding: 18px; background: linear-gradient(145deg, #211d37 0%, #171629 100%) !important; border: 1px solid #51466f !important; border-radius: 18px !important; }
+.supply-card-top { display: flex; align-items: center; gap: 12px; padding-bottom: 13px; border-bottom: 1px solid rgba(190,177,230,.16); }
+.supply-product-thumb { width: 58px; height: 58px; flex: 0 0 58px; display: grid; place-items: center; overflow: hidden; border-radius: 13px; background: #30264d; color: #b7a2ff; }
+.supply-product-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.supply-line-title { flex: 1; display: grid; gap: 4px; padding: 0 !important; border: 0 !important; }
+.supply-line-title strong { font-size: 15px !important; color: #f7f4ff !important; }
+.supply-line-title span { color: #b7acd5; font-size: 12px; }
+.supply-delete { color: #ff879b !important; background: rgba(255,102,135,.09); }
+.supply-line-card label { color: #e8e1fa !important; font-size: 13px !important; gap: 8px; }
+.supply-line-card input, .supply-line-card select { min-height: 46px; background: #121020 !important; color: #fff !important; border: 1px solid #51466f !important; border-radius: 11px; }
+.supply-line-card input:focus, .supply-line-card select:focus { border-color: #9b7cff !important; box-shadow: 0 0 0 3px rgba(123,83,255,.2); outline: none; }
+.supply-lines-heading strong { color: var(--text, #f7f4ff); font-size: 16px; }
+.supply-lines-heading p { color: #c7bfdc !important; font-size: 13px; }
+.admin-users-panel, .admin-users-panel * { scroll-behavior: auto; }
+.admin-user-form input, .admin-user-form select { scroll-margin-top: 0 !important; }
