@@ -13,7 +13,7 @@ spring:
 
 app:
   expiring-hours: 48        # партия считается "истекающей", если до срока меньше N часов
-  hot-horizon-hours: 72     # горизонт для расчёта горячих предложений
+  hot-horizon-hours: 72     # горизонт для расчёта горяч предложений
   users:
     admin-password: ${ADMIN_PASSWORD:admin123}
     staff-password: ${STAFF_PASSWORD:staff123}
