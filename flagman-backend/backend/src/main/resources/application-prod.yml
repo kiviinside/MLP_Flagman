@@ -3,12 +3,12 @@ spring:
     url: ${SPRING_DATASOURCE_URL}
     username: ${SPRING_DATASOURCE_USERNAME}
     password: ${SPRING_DATASOURCE_PASSWORD}
+    driver-class-name: org.postgresql.Driver
   jpa:
     hibernate:
       ddl-auto: validate
     open-in-view: false
-
-app:
-  users:
-    admin-password: ${ADMIN_PASSWORD}
-    staff-password: ${STAFF_PASSWORD}
+  flyway:
+    enabled: true
+server:
+  forward-headers-strategy: framework
