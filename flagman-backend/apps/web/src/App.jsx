@@ -420,7 +420,7 @@ export default function App() {
         <div className="page-heading">
           <div>
             <div className="eyebrow">{currentWeekday.toLocaleUpperCase('ru-RU')}, {currentDate.toLocaleUpperCase('ru-RU')}</div>
-            <h1>Добро пожаловать, Алексей! <span className="wave">✦</span></h1>
+            <h1>Добро пожаловать, {userFirstName}! <span className="wave">✦</span></h1>
             <p>Следите за остатками, сроками годности и эффективностью ресторана.</p>
           </div>
           <button className="button primary" onClick={() => openModal('product')}>
@@ -673,7 +673,6 @@ export default function App() {
                   <tr key={s.name}>
                     <td>
                       <span className="product-name">
-                        <span className="food-emoji">{['🍝', '🥗', '🍰'][i]}</span>
                         {s.name}
                       </span>
                     </td>
@@ -839,10 +838,6 @@ export default function App() {
           </div>
           <div className="settings-info">
             <CircleHelp size={19} />
-            <div>
-              <strong>Интеграция с сервером</strong>
-              <p>Фронтенд подготовлен к подключению Java API. Авторизация, хранение данных и обновления в реальном времени будут добавлены на стороне сервера.</p>
-            </div>
           </div>
         </section>
       </>
@@ -899,10 +894,14 @@ export default function App() {
       <aside className={`sidebar ${mobileNav ? 'sidebar-open' : ''}`}>
         <div className="brand">
           <div className="brand-mark">
-            <ChefHat size={26} />
+            <img
+              src="/images/MLP.jpg"
+              alt="MLP"
+              style={{ width: 43, height: 43, objectFit: 'cover', borderRadius: 14, display: 'block' }}
+            />
           </div>
           <div>
-            <strong>Вкус&Баланс</strong>
+            <strong>MLP</strong>
             <span>Управление рестораном</span>
           </div>
           <button className="close-nav icon-button" onClick={() => setMobileNav(false)} aria-label="Закрыть меню">
@@ -926,10 +925,10 @@ export default function App() {
           </div>
         </div>
         <div className="profile">
-          <div className="avatar">А</div>
+          {userInitials}
           <div>
-            <strong>Алексей Иванов</strong>
-            <span>Администратор</span>
+            <strong>{userName}</strong>
+            <span>{userRole}</span>
           </div>
           <button className="icon-button" aria-label="Выйти" onClick={() => { clearApiCredentials(); setSignedIn(false); setProducts([]); setOrders([]); setSupplies([]); }}>
             <LogOut size={16} />
@@ -967,10 +966,10 @@ export default function App() {
               <Bell size={19} />
               {notificationItems.length > 0 && <i />}
             </button>
-            <div className="top-avatar">АИ</div>
+            {userInitials}
             <div className="user-label">
-              <strong>Алексей</strong>
-              <span>Администратор</span>
+              <strong>{userName}</strong>
+              <span>{userRole}</span>
             </div>
           </div>
         </header>
@@ -978,8 +977,7 @@ export default function App() {
         <div className="page-content" key={active}>
           {pageContent()}
           <footer className="footer">
-            <span>© {today.getFullYear()} Вкус&Баланс</span>
-            <span>Контроль запасов с заботой о качестве <span className="footer-heart">♥</span></span>
+            <span>© {today.getFullYear()} MLP</span>
           </footer>
         </div>
       </main>
@@ -1037,10 +1035,14 @@ export default function App() {
         <div className="auth-backdrop">
           <form className="auth-card" onSubmit={handleLogin}>
             <div className="auth-logo">
-              <ChefHat size={30} />
+              <img
+                src="/images/MLP.jpg"
+                alt="MLP"
+                style={{ width: 56, height: 56, objectFit: 'cover', borderRadius: 17, display: 'block' }}
+              />
             </div>
-            <span className="eyebrow">ВКУС&БАЛАНС</span>
-            <h1>С возвращением!</h1>
+            <span className="eyebrow">MLP</span>
+            <h1>Добро пожаловать!</h1>
             <p>Войдите, чтобы управлять рестораном.</p>
             <label>
               Логин (для администратора: admin)

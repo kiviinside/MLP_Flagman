@@ -3,16 +3,17 @@ import { createPortal } from 'react-dom';
 import { 
   LayoutDashboard, Truck, ClipboardList, Boxes, Clock3, Ban, Flame, 
   ChartNoAxesCombined, Settings, Bell, Search, Plus, ChevronRight, Menu, X, 
-  ChefHat, ArrowUpRight, PackagePlus, ShoppingBasket, FileChartColumn, 
+  ChefHat, UtensilsCrossed, ArrowUpRight, PackagePlus, ShoppingBasket, FileChartColumn, 
   CircleHelp, LogOut, Check, AlertTriangle, CalendarDays, Filter, Download, 
   CircleCheck, Trash2, RefreshCw 
 } from 'lucide-react';
-import { products as seedProducts, initialOrders, initialSupplies, dishes } from './data/mockData.js';
+import { dishes } from './data/mockData.js';
 
 const nav = [
   ['Главная', LayoutDashboard], 
   ['Поставки', Truck], 
   ['Заказы', ClipboardList], 
+  ['Блюда', UtensilsCrossed],
   ['Склад', Boxes], 
   ['Сроки годности', Clock3], 
   ['Стоп-лист', Ban], 
@@ -23,8 +24,8 @@ const nav = [
 
 const money = n => new Intl.NumberFormat('ru-RU').format(n) + ' ₽';
 const readStorage = (key, fallback) => { try { const value = localStorage.getItem(key); return value ? JSON.parse(value) : fallback; } catch { return fallback; } };
-const DEMO_ADMIN = { name: 'Администратор', email: 'admin@vkusbalans.ru', password: '', role: 'admin' };
-const getInitialUsers = () => { const users = readStorage('vkus-balans-users', null); if (!users || !users.length) { try { localStorage.setItem('vkus-balans-users', JSON.stringify([DEMO_ADMIN])); } catch {} return [DEMO_ADMIN]; } if (!users.some(u => u.role === 'admin')) users[0].role = 'admin'; const admin = users.find(u => u.role === 'admin'); if (admin && admin.email.toLowerCase() === DEMO_ADMIN.email) admin.password = ''; try { localStorage.setItem('vkus-balans-users', JSON.stringify(users)); } catch {} return users; };
+const DEFAULT_ADMIN = { name: 'Администратор', email: 'admin@vkusbalans.ru', password: '', role: 'admin' };
+const getInitialUsers = () => { const users = readStorage('vkus-balans-users', null); if (!users || !users.length) { try { localStorage.setItem('vkus-balans-users', JSON.stringify([DEFAULT_ADMIN])); } catch {} return [DEFAULT_ADMIN]; } return users; };
 
 function Status({ children, tone }) { 
   return (
@@ -95,16 +96,23 @@ export default function App() {
   const [login, setLogin] = useState({ email: '', password: '', name: '' });
   const [users, setUsers] = useState(getInitialUsers);
   const [currentUser, setCurrentUser] = useState(() => { const email = (() => { try { return localStorage.getItem('vkus-balans-current-user'); } catch { return ''; } })(); return getInitialUsers().find(u => u.email === email) || null; });
+  const userName = currentUser?.name?.trim() || currentUser?.email?.split('@')[0] || 'Пользователь';
+const userFirstName = userName.split(' ')[0];
+const userRole = currentUser?.role === 'admin' ? 'Администратор' : 'Сотрудник';
+const userInitials = userName.split(' ').filter(Boolean).map(w => w[0]).join('').slice(0, 2).toUpperCase();
   const [newUser, setNewUser] = useState({ name: '', email: '', password: '', role: 'employee' });
   const [supplyForm, setSupplyForm] = useState({ supplier: '', items: [{ productId: '', name: '', quantity: '', unit: 'кг', expiry: '' }] });
   const [mobileNav, setMobileNav] = useState(false);
   const [search, setSearch] = useState('');
-  const [products, setProducts] = useState(() => readStorage('vkus-balans-products', seedProducts));
-  const [orders, setOrders] = useState(() => readStorage('vkus-balans-orders', initialOrders));
-  const [supplies, setSupplies] = useState(() => readStorage('vkus-balans-supplies', initialSupplies));
-  useEffect(() => { try { localStorage.setItem('vkus-balans-products', JSON.stringify(products)); } catch {} }, [products]);
-  useEffect(() => { try { localStorage.setItem('vkus-balans-orders', JSON.stringify(orders)); } catch {} }, [orders]);
-  useEffect(() => { try { localStorage.setItem('vkus-balans-supplies', JSON.stringify(supplies)); } catch {} }, [supplies]);
+  const [products, setProducts] = useState(() => readStorage('mlp-products', []));
+  const [menuDishes, setMenuDishes] = useState(() => readStorage('mlp-dishes', dishes));
+  const [dishForm, setDishForm] = useState({ name: '', description: '', ingredients: '', category: 'Основное', price: '', kcal: '', protein: '', fat: '', carbs: '' });
+  const [orders, setOrders] = useState(() => readStorage('mlp-orders', []));
+  const [supplies, setSupplies] = useState(() => readStorage('mlp-supplies', []));
+  useEffect(() => { try { localStorage.setItem('mlp-products', JSON.stringify(products)); } catch {} }, [products]);
+  useEffect(() => { try { localStorage.setItem('mlp-dishes', JSON.stringify(menuDishes)); } catch {} }, [menuDishes]);
+  useEffect(() => { try { localStorage.setItem('mlp-orders', JSON.stringify(orders)); } catch {} }, [orders]);
+  useEffect(() => { try { localStorage.setItem('mlp-supplies', JSON.stringify(supplies)); } catch {} }, [supplies]);
   const [modal, setModal] = useState('');
   const [notice, setNotice] = useState('');
   const [selectedHotDish, setSelectedHotDish] = useState(null);
@@ -114,19 +122,15 @@ export default function App() {
   const [form, setForm] = useState({ name: '', amount: '', unit: 'кг', expiry: '' });
   const [selectedDishes, setSelectedDishes] = useState({});
   
-  const menuDishes = dishes.map((dish, index) => ({ 
-    ...dish, 
-    id: index + 1, 
-    price: [450, 380, 320, 520][index] || 350 
-  }));
+  const normalizedDishes = menuDishes.map((dish, index) => ({ ...dish, id: dish.id ?? `dish-${index + 1}`, price: dish.price === '' || dish.price == null ? null : Number(dish.price) }));
   
   const selectedDishCount = Object.values(selectedDishes).reduce((sum, qty) => sum + qty, 0);
-  const selectedDishTotal = menuDishes.reduce((sum, dish) => sum + dish.price * (selectedDishes[dish.id] || 0), 0);
+  const selectedDishTotal = normalizedDishes.reduce((sum, dish) => sum + (Number(dish.price) || 0) * (selectedDishes[dish.id] || 0), 0);
   
   const filteredProducts = useMemo(() => 
     products.filter(p => 
       `${p.name} ${p.category}`.toLowerCase().includes(search.toLowerCase()) && 
-      (filter === 'Все' || (filter === 'Скоро истекает' ? p.days <= 2 : filter === 'Просрочено' ? p.days <= 0 : p.category === filter))
+      (filter === 'Все' || (filter === 'Скоро истекает' ? p.days != null && p.days <= 2 : filter === 'Просрочено' ? p.days != null && p.days <= 0 : p.category === filter))
     ), 
     [products, search, filter]
   );
@@ -152,7 +156,7 @@ export default function App() {
       amount: Number(form.amount), 
       unit: form.unit, 
       expiry: form.expiry || 'Не указано', 
-      days: 5, 
+      days: form.expiry ? Math.ceil((new Date(`${form.expiry}T00:00:00`).getTime() - new Date(new Date().toDateString()).getTime()) / 86400000) : null, 
       category: 'Другое' 
     }]); 
     setForm({ name: '', amount: '', unit: 'кг', expiry: '' }); 
@@ -193,7 +197,7 @@ export default function App() {
       const quantity = Number(item.quantity);
       const expiryDate = new Date(`${item.expiry}T00:00:00`);
       const days = Math.ceil((expiryDate.getTime() - new Date(new Date().toDateString()).getTime()) / 86400000);
-      const newBatch = { id: Date.now() + index, name, image: existing?.image || '/images/placeholder.jpg', amount: quantity, unit, expiry: new Date(`${item.expiry}T00:00:00`).toLocaleDateString('ru-RU'), days, category: existing?.category || 'Другое', batchSupplyId: id };
+      const newBatch = { id: Date.now() + index, name, image: existing?.image || '/images/placeholder.svg', amount: quantity, unit, expiry: new Date(`${item.expiry}T00:00:00`).toLocaleDateString('ru-RU'), days, category: existing?.category || 'Другое', batchSupplyId: id };
       return { name, quantity, unit, expiry: newBatch.expiry, productId: newBatch.id, batch: newBatch };
     });
     setProducts(prev => [...receivedItems.map(item => item.batch), ...prev]);
@@ -216,9 +220,29 @@ export default function App() {
     notify('Пользователь зарегистрирован администратором');
   };
 
+  const addDish = e => {
+    e.preventDefault();
+    if (currentUser?.role !== 'admin') { notify('Добавлять блюда может только администратор'); return; }
+    const dish = {
+      id: `dish-${Date.now()}`,
+      name: dishForm.name.trim(),
+      description: dishForm.description.trim(),
+      ingredients: dishForm.ingredients.trim(),
+      category: dishForm.category,
+      image: '',
+      price: dishForm.price === '' ? null : Number(dishForm.price),
+      kcal: Number(dishForm.kcal), protein: Number(dishForm.protein),
+      fat: Number(dishForm.fat), carbs: Number(dishForm.carbs)
+    };
+    setMenuDishes(prev => [...prev, dish]);
+    setModal('');
+    notify(`Блюдо «${dish.name}» добавлено в меню`);
+  };
+
   const openModal = type => { 
     setModal(type); 
     setForm({ name: '', amount: '', unit: 'кг', expiry: '' });
+    if (type === 'dish') setDishForm({ name: '', description: '', ingredients: '', category: 'Основное', price: '', kcal: '', protein: '', fat: '', carbs: '' });
     if (type === 'supply') setSupplyForm({ supplier: '', items: [{ productId: '', name: '', quantity: '', unit: 'кг', expiry: '' }] });
   };
 
@@ -248,8 +272,8 @@ export default function App() {
               <td>{p.unit}</td>
               <td>{p.expiry}</td>
               <td>
-                <Status tone={p.days <= 0 ? 'red' : p.days <= 2 ? 'amber' : 'green'}>
-                  {p.days <= 0 ? 'Просрочен' : p.days <= 2 ? `${p.days} дн.` : 'В норме'}
+                <Status tone={p.days == null ? 'amber' : p.days <= 0 ? 'red' : p.days <= 2 ? 'amber' : 'green'}>
+                  {p.days == null ? 'Нет данных' : p.days <= 0 ? 'Просрочен' : p.days <= 2 ? `${p.days} дн.` : 'В норме'}
                 </Status>
               </td>
               <td>
@@ -318,15 +342,16 @@ export default function App() {
                 <td className="strong-cell">{s.amount ? money(s.amount) : "—"}</td>
                 <td><Status>{s.status}</Status></td>
               </tr>
-              <tr className="supply-items-row"><td colSpan="5"><strong>Состав поставки:</strong>{s.items?.length ? <div className="supply-item-chips">{s.items.map((item, i) => <span key={`${s.id}-${i}`}>{item.name} — {item.quantity} {item.unit}, годен до {item.expiry}</span>)}</div> : <span className="muted-inline">Состав для старых демонстрационных записей не указан</span>}</td></tr>
+              <tr className="supply-items-row"><td colSpan="5"><strong>Состав поставки:</strong>{s.items?.length ? <div className="supply-item-chips">{s.items.map((item, i) => <span key={`${s.id}-${i}`}>{item.name} — {item.quantity} {item.unit}, годен до {item.expiry}</span>)}</div> : <span className="muted-inline">Состав не указан</span>}</td></tr>
             </React.Fragment>
           ))}
         </tbody>
       </table>
+      {supplies.length === 0 && <EmptyState text="Поставок пока нет. Добавьте первую поставку, чтобы начать учёт партий." />}
     </div>
   );
 
-  const expiring = products.filter(p => p.days <= 2);
+  const expiring = products.filter(p => p.days != null && p.days <= 2);
   const today = new Date();
   const currentDate = new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' }).format(today);
   const currentWeekday = new Intl.DateTimeFormat('ru-RU', { weekday: 'long' }).format(today);
@@ -335,19 +360,16 @@ export default function App() {
   const notificationItems = [
     ...expiring.map(p => ({ 
       id: `expiry-${p.id}`, 
-      title: p.days <= 0 ? `Истёк срок: ${p.name}` : `Скоро истекает: ${p.name}`, 
-      text: `${p.amount} ${p.unit} · ${p.days <= 0 ? 'проверьте партию' : `осталось ${p.days} дн.`}`, 
-      tone: p.days <= 0 ? 'red' : 'amber' 
+      title: p.days != null && p.days <= 0 ? `Истёк срок: ${p.name}` : `Скоро истекает: ${p.name}`, 
+      text: `${p.amount} ${p.unit} · ${p.days != null && p.days <= 0 ? 'проверьте партию' : `осталось ${p.days} дн.`}`, 
+      tone: p.days != null && p.days <= 0 ? 'red' : 'amber' 
     })), 
     ...(orders.length ? [{ id: 'orders', title: 'Заказы ресторана', text: `Всего заказов: ${orders.length}`, tone: 'purple' }] : [])
   ];
   
-  const stopItems = [
-    { name: 'Паста карбонара', reason: 'Недостаточно сливок' }, 
-    { name: 'Салат с курицей', reason: 'Недостаточно куриного филе' }, 
-    { name: 'Чизкейк', reason: 'Нет сливочного сыра' }
-  ];
-  const hotDishes = dishes.map(d => ({ ...d, blocked: false }));
+  // Стоп-лист и рекомендации не заполняются фиктивными записями: появятся из фактических данных склада и рецептур.
+  const stopItems = [];
+  const hotDishes = [];
 
   function Dashboard() { 
     return (
@@ -355,7 +377,7 @@ export default function App() {
         <div className="page-heading">
           <div>
             <div className="eyebrow">{currentWeekday.toLocaleUpperCase('ru-RU')}, {currentDate.toLocaleUpperCase('ru-RU')}</div>
-            <h1>Добро пожаловать, Алексей! <span className="wave">✦</span></h1>
+            <h1>Добро пожаловать, {userFirstName}! <span className="wave">✦</span></h1>
             <p>Следите за остатками, сроками годности и эффективностью ресторана.</p>
           </div>
           <button className="button primary" onClick={() => openModal('product')}>
@@ -363,10 +385,10 @@ export default function App() {
           </button>
         </div>
         <div className="stats-grid">
-          <StatCard icon={Boxes} label="Общий остаток продуктов" value={products.length ? '186' : '0'} hint="наименований на складе" tone="purple" />
-          <StatCard icon={AlertTriangle} label="Истекает срок годности" value={expiring.length + 4} hint="требуют внимания" tone="orange" />
-          <StatCard icon={CalendarDays} label="Ближайший срок" value="1 день" hint="сметана и салат" tone="blue" />
-          <StatCard icon={ChefHat} label="Активных блюд в меню" value="48" hint="из 52 блюд" tone="green" />
+          <StatCard icon={Boxes} label="Общий остаток продуктов" value={products.length} hint="наименований на складе" tone="purple" />
+          <StatCard icon={AlertTriangle} label="Истекает срок годности" value={expiring.length} hint="требуют внимания" tone="orange" />
+          <StatCard icon={CalendarDays} label="Ближайший срок" value={expiring.length ? `${Math.max(0, Math.min(...expiring.map(p => p.days)))} дн.` : '—'} hint="по данным склада" tone="blue" />
+          <StatCard icon={ChefHat} label="Активных блюд в меню" value={menuDishes.length} hint="в каталоге блюд" tone="green" />
         </div>
         <div className="dashboard-grid">
           <section className="panel stock-panel">
@@ -383,8 +405,8 @@ export default function App() {
                     <strong>{p.name}</strong>
                     <small>{p.amount} {p.unit} · до {p.expiry}</small>
                   </div>
-                  <Status tone={p.days <= 0 ? 'red' : 'amber'}>
-                    {p.days <= 0 ? 'Просрочено' : `${p.days} дн.`}
+                  <Status tone={p.days == null ? 'amber' : p.days <= 0 ? 'red' : 'amber'}>
+                    {p.days == null ? 'Нет данных' : p.days <= 0 ? 'Просрочено' : `${p.days} дн.`}
                   </Status>
                 </div>
               ))}
@@ -404,89 +426,13 @@ export default function App() {
             </div>
           </section>
           <section className="panel chart-panel">
-            <div className="chart-heading">
-              <SectionTitle title="Динамика остатков" subtitle="Изменение запасов за последние 7 дней" />
-              <span className="chart-period">7 дней <ChevronRight size={14} /></span>
-            </div>
-            <div className="chart-kpis">
-              <div>
-                <span>Всего на складе</span>
-                <strong>1 284 <small>ед.</small></strong>
-              </div>
-              <div className="chart-trend">
-                <span className="trend-up"><ArrowUpRight size={14} /> 8,4%</span>
-                <small>к прошлой неделе</small>
-              </div>
-            </div>
-            <div className="chart-legend">
-              <span><i className="dot veg-dot" /> Овощи <b>420</b></span>
-              <span><i className="dot meat-dot" /> Мясо <b>356</b></span>
-              <span><i className="dot dairy-dot" /> Молочные <b>508</b></span>
-            </div>
-            <div className="line-chart modern-line-chart">
-              <div className="y-labels">
-                <span>600</span>
-                <span>450</span>
-                <span>300</span>
-                <span>150</span>
-                <span>0</span>
-              </div>
-              <svg viewBox="0 0 560 190" role="img" aria-label="График динамики остатков овощей, мяса и молочных продуктов за неделю" preserveAspectRatio="none">
-                <defs>
-                  <linearGradient id="vegArea" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#20b779" stopOpacity=".22" />
-                    <stop offset="100%" stopColor="#20b779" stopOpacity="0" />
-                  </linearGradient>
-                  <linearGradient id="meatArea" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#b95af0" stopOpacity=".18" />
-                    <stop offset="100%" stopColor="#b95af0" stopOpacity="0" />
-                  </linearGradient>
-                  <linearGradient id="dairyArea" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#f5b83d" stopOpacity=".18" />
-                    <stop offset="100%" stopColor="#f5b83d" stopOpacity="0" />
-                  </linearGradient>
-                </defs>
-                <g className="grid-lines">
-                  <path d="M0 18H560 M0 54H560 M0 90H560 M0 126H560 M0 162H560" />
-                </g>
-                <path className="chart-area veg-area" d="M0 74 C35 67 55 45 93 53 S150 65 186 74 S245 99 280 91 S340 110 373 119 S430 130 466 141 S525 150 560 156 L560 162 L0 162Z" />
-                <path className="chart-area meat-area" d="M0 111 C38 107 57 103 93 109 S150 113 186 122 S245 125 280 132 S340 139 373 141 S430 143 466 148 S525 152 560 158 L560 162 L0 162Z" />
-                <path className="chart-area dairy-area" d="M0 140 C35 148 57 138 93 142 S150 124 186 128 S245 109 280 104 S340 88 373 91 S430 77 466 83 S525 67 560 62 L560 162 L0 162Z" />
-                <path className="line purple-line" d="M0 74 C35 67 55 45 93 53 S150 65 186 74 S245 99 280 91 S340 110 373 119 S430 130 466 141 S525 150 560 156" />
-                <path className="line pink-line" d="M0 111 C38 107 57 103 93 109 S150 113 186 122 S245 125 280 132 S340 139 373 141 S430 143 466 148 S525 152 560 158" />
-                <path className="line blue-line" d="M0 140 C35 148 57 138 93 142 S150 124 186 128 S245 109 280 104 S340 88 373 91 S430 77 466 83 S525 67 560 62" />
-                <g className="chart-points purple-points">
-                  <circle cx="93" cy="53" r="3.5" />
-                  <circle cx="280" cy="91" r="3.5" />
-                  <circle cx="466" cy="141" r="3.5" />
-                  <circle cx="560" cy="156" r="4.5" />
-                </g>
-                <g className="chart-points pink-points">
-                  <circle cx="186" cy="122" r="3.5" />
-                  <circle cx="373" cy="141" r="3.5" />
-                  <circle cx="560" cy="158" r="4.5" />
-                </g>
-                <g className="chart-points blue-points">
-                  <circle cx="93" cy="142" r="3.5" />
-                  <circle cx="280" cy="104" r="3.5" />
-                  <circle cx="466" cy="83" r="3.5" />
-                  <circle cx="560" cy="62" r="4.5" />
-                </g>
-                <g className="axis-labels">
-                  <text x="0" y="184">Пн</text>
-                  <text x="93" y="184">Вт</text>
-                  <text x="186" y="184">Ср</text>
-                  <text x="280" y="184">Чт</text>
-                  <text x="373" y="184">Пт</text>
-                  <text x="466" y="184">Сб</text>
-                  <text x="548" y="184">Вс</text>
-                </g>
-              </svg>
-            </div>
+            <SectionTitle title="Динамика остатков" subtitle="График появится после накопления фактической истории движения продуктов." />
+            <EmptyState text="Пока нет данных для построения графика. Зарегистрируйте поставки и движения продуктов." />
           </section>
           <section className="panel">
             <SectionTitle title="Последние заказы" subtitle="Обновление списка вручную" action="Все заказы" onAction={() => changePage('Заказы')} />
             <div className="recent-orders">
+              {orders.length === 0 && <EmptyState text="Заказов пока нет" />}
               {orders.slice(0, 4).map(o => (
                 <div className="recent-order" key={o.id}>
                   <div>
@@ -544,8 +490,8 @@ export default function App() {
         <SectionTitle title="Сроки годности" subtitle="Контроль каждой партии и приоритет использования продуктов по принципу FEFO." />
         <div className="stats-grid three">
           <StatCard icon={Clock3} label="Истекают в ближайшие 48 часов" value={expiring.length} hint="позиций" tone="orange" />
-          <StatCard icon={AlertTriangle} label="Просрочено" value={products.filter(p => p.days <= 0).length} hint="позиций требуют проверки" tone="red" />
-          <StatCard icon={CircleCheck} label="В пределах срока" value={products.filter(p => p.days > 2).length} hint="позиций" tone="green" />
+          <StatCard icon={AlertTriangle} label="Просрочено" value={products.filter(p => p.days != null && p.days <= 0).length} hint="позиций требуют проверки" tone="red" />
+          <StatCard icon={CircleCheck} label="В пределах срока" value={products.filter(p => p.days != null && p.days > 2).length} hint="позиций" tone="green" />
         </div>
         <section className="panel">
           <SectionTitle title="Остатки по партиям" subtitle="Сначала используйте продукты с ближайшим сроком годности." />
@@ -567,21 +513,23 @@ export default function App() {
                     <td>
                       <span className="product-name">
                         <img className="food-emoji" src={p.image} alt={p.name} />
+                        {p.name}
                       </span>
                     </td>
-                    <td>ПР-{String(201 + i).padStart(3, '0')}</td>
+                    <td>{p.batchSupplyId ? `ПР-${p.batchSupplyId}` : '—'}</td>
                     <td>{p.amount} {p.unit}</td>
                     <td>{p.expiry}</td>
                     <td>
-                      <Status tone={p.days <= 0 ? 'red' : p.days <= 2 ? 'amber' : 'green'}>
-                        {p.days <= 0 ? 'Истёк' : `${p.days} дн.`}
+                      <Status tone={p.days == null ? 'amber' : p.days <= 0 ? 'red' : p.days <= 2 ? 'amber' : 'green'}>
+                        {p.days == null ? 'Нет данных' : p.days <= 0 ? 'Истёк' : `${p.days} дн.`}
                       </Status>
                     </td>
-                    <td>{p.days <= 2 ? 'Использовать в первую очередь' : 'В обычном порядке'}</td>
+                    <td>{p.days != null && p.days <= 2 ? 'Использовать в первую очередь' : 'В обычном порядке'}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
+            {products.length === 0 && <EmptyState text="Партий пока нет. Зарегистрируйте поставку, чтобы отслеживать сроки годности." />}
           </div>
         </section>
       </>
@@ -596,9 +544,9 @@ export default function App() {
           <AlertTriangle size={22} />
           <div>
             <strong>Автоматический контроль доступности</strong>
-            <p>Перед оформлением заказа проверяется наличие всех необходимых ингредиентов.</p>
+            <p>Стоп-лист будет рассчитан по рецептурам блюд и фактическим остаткам продуктов.</p>
           </div>
-          <Status tone="red">{stopItems.length} блюда</Status>
+          <Status tone={stopItems.length ? 'red' : 'green'}>{stopItems.length} блюд</Status>
         </div>
         <section className="panel">
           <div className="table-wrap">
@@ -612,6 +560,7 @@ export default function App() {
                 </tr>
               </thead>
               <tbody>
+                {stopItems.length === 0 && <tr><td colSpan="4"><EmptyState text="Нет блюд в стоп-листе. После подключения рецептур доступность будет рассчитываться по остаткам." /></td></tr>}
                 {stopItems.map((s, i) => (
                   <tr key={s.name}>
                     <td>
@@ -637,11 +586,45 @@ export default function App() {
           <AlertTriangle size={21} />
           <div>
             <strong>Как блюдо вернётся в меню?</strong>
-            <p>После регистрации новой поставки и обновления складских остатков доступность должна быть пересчитана. В этой демонстрации серверная синхронизация пока не подключена.</p>
+            <p>Список будет обновляться после подключения расчёта доступности на основе рецептур и остатков.</p>
           </div>
         </div>
       </>
     ); 
+  }
+
+  function Dishes() {
+    return (
+      <>
+        <SectionTitle title="Блюда" subtitle="Основное меню ресторана, пищевая ценность и состав блюд." />
+        <div className="toolbar">
+          <span className="toolbar-note"><UtensilsCrossed size={18} /> {menuDishes.length} блюд в меню</span>
+          {currentUser?.role === 'admin' && <button className="button primary" onClick={() => openModal('dish')}><Plus size={16} /> Добавить блюдо</button>}
+        </div>
+        {menuDishes.length === 0 ? <EmptyState text="В меню пока нет блюд." /> : <div className="dish-grid catalog-dish-grid">
+          {normalizedDishes.map(dish => (
+            <article className="dish-card" key={dish.id}>
+              <div className="dish-art catalog-dish-art">
+                {dish.image ? <img className="dish-art-img" src={dish.image} alt={dish.name} loading="lazy" /> : <ChefHat size={42} aria-label="Без изображения" />}
+                <span className="dish-category-label">{dish.category || 'Блюдо'}</span>
+              </div>
+              <div className="dish-body">
+                <h3>{dish.name}</h3>
+                <p>{dish.description || 'Описание не добавлено.'}</p>
+                <div className="catalog-nutrition">
+                  <span><strong>{dish.kcal ?? '—'}</strong> ккал</span>
+                  <span>Б <strong>{dish.protein ?? '—'}</strong> г</span>
+                  <span>Ж <strong>{dish.fat ?? '—'}</strong> г</span>
+                  <span>У <strong>{dish.carbs ?? '—'}</strong> г</span>
+                </div>
+                {dish.ingredients && <details className="dish-ingredients"><summary>Состав блюда</summary><p>{dish.ingredients}</p></details>}
+              </div>
+            </article>
+          ))}
+        </div>}
+        <p className="dish-disclaimer catalog-disclaimer">КБЖУ указано на 100 г. Для блюд из исходного меню значения ориентировочные; для новых блюд их вводит администратор.</p>
+      </>
+    );
   }
 
   function HotOffers() { 
@@ -650,9 +633,9 @@ export default function App() {
         <SectionTitle title="Горячие предложения" subtitle="Рекомендации блюд, которые помогут использовать продукты до окончания срока годности." />
         <div className="recommendation-note">
           <Flame size={20} />
-          <span>Приоритет рассчитан по демонстрационным данным: чем ближе срок годности ингредиента, тем выше рекомендация.</span>
+          <span>Приоритет будет рассчитываться по фактическим партиям продуктов и составу блюд.</span>
         </div>
-        <div className="dish-grid">
+        {hotDishes.length === 0 ? <EmptyState text="Пока нет рекомендаций. Добавьте блюда и фактические партии продуктов, чтобы рассчитывать приоритет автоматически." /> : <div className="dish-grid">
           {hotDishes.map((d, i) => (
             <article className="dish-card dish-card-clickable" key={d.name} onClick={() => setSelectedHotDish(d)} role="button" tabIndex={0} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') setSelectedHotDish(d); }}>
               <div className="dish-art">
@@ -673,25 +656,20 @@ export default function App() {
               </div>
             </article>
           ))}
-        </div>
+        </div>}
         {selectedHotDish && (() => {
-          const details = {
-            'Цезарь с курицей': { description: 'Популярный салат с сочной курицей, хрустящими листьями салата и пикантной заправкой.', ingredients: 'Куриное филе, листья салата, помидоры, сухарики, пармезан, соус «Цезарь».', kcal: 190, protein: 14, fat: 11, carbs: 8 },
-            'Греческий салат': { description: 'Свежий овощной салат с сыром фета и лёгкой заправкой на основе оливкового масла.', ingredients: 'Помидоры, огурцы, сладкий перец, красный лук, сыр фета, маслины, оливковое масло.', kcal: 130, protein: 4, fat: 10, carbs: 6 },
-            'Суп грибной': { description: 'Нежный ароматный грибной суп со сливочным вкусом.', ingredients: 'Шампиньоны, картофель, лук, морковь, сливки или сметана, зелень, соль и перец.', kcal: 65, protein: 2, fat: 4, carbs: 6 },
-            'Пицца Маргарита': { description: 'Классическая пицца с томатным соусом, расплавленной моцареллой и базиликом.', ingredients: 'Тесто, томатный соус, моцарелла, помидоры, базилик, оливковое масло.', kcal: 250, protein: 11, fat: 9, carbs: 31 }
-          }[selectedHotDish.name] || {};
+          const details = selectedHotDish;
           return createPortal(<div className="dish-modal-backdrop" onClick={() => setSelectedHotDish(null)}>
             <section className="dish-modal" role="dialog" aria-modal="true" aria-label={selectedHotDish.name} onClick={e => e.stopPropagation()}>
               <button className="dish-modal-close" aria-label="Закрыть" onClick={() => setSelectedHotDish(null)}><X size={22} /></button>
-              <img className="dish-modal-image" src={selectedHotDish.image} alt={selectedHotDish.name} />
+              {selectedHotDish.image ? <img className="dish-modal-image" src={selectedHotDish.image} alt={selectedHotDish.name} /> : <div className="dish-modal-image dish-modal-placeholder"><ChefHat size={48} /></div>}
               <div className="dish-modal-content">
-                <span className="dish-modal-kicker">ГОРЯЧЕЕ ПРЕДЛОЖЕНИЕ</span>
+                <span className="dish-modal-kicker">ИНФОРМАЦИЯ О БЛЮДЕ</span>
                 <h2>{selectedHotDish.name}</h2>
                 <p>{details.description}</p>
                 <h3>Ингредиенты</h3>
                 <p>{details.ingredients}</p>
-                <h3>КБЖУ на 100 г</h3><div className="dish-nutrition"><div><span>Калории</span><strong>{details.kcal} ккал</strong></div><div><span>Белки</span><strong>{details.protein} г</strong></div><div><span>Жиры</span><strong>{details.fat} г</strong></div><div><span>Углеводы</span><strong>{details.carbs} г</strong></div></div>
+                <h3>КБЖУ на 100 г</h3><div className="dish-nutrition"><div><span>Калории</span><strong>{details.kcal ?? '—'} ккал</strong></div><div><span>Белки</span><strong>{details.protein ?? '—'} г</strong></div><div><span>Жиры</span><strong>{details.fat ?? '—'} г</strong></div><div><span>Углеводы</span><strong>{details.carbs ?? '—'} г</strong></div></div>
                 <small className="dish-disclaimer">Значения КБЖУ приблизительные на 100 г и зависят от точной рецептуры и количества ингредиентов.</small>
               </div>
             </section>
@@ -719,23 +697,15 @@ export default function App() {
           </button>
         </div>
         <div className="stats-grid">
-          <StatCard icon={Trash2} label="Списано продуктов" value="12,4 кг" hint="за выбранный период" tone="orange" />
-          <StatCard icon={ChartNoAxesCombined} label="Доля списаний" value="3,2%" hint="от общего объёма" tone="green" />
-          <StatCard icon={AlertTriangle} label="Дефицитных ингредиентов" value="5" hint="требуют пополнения" tone="red" />
-          <StatCard icon={Ban} label="Прогноз стоп-листа" value="3 дня" hint="оценка по остаткам" tone="purple" />
+          <StatCard icon={Trash2} label="Списано продуктов" value="—" hint="нет записей о списании" tone="orange" />
+          <StatCard icon={ChartNoAxesCombined} label="Доля списаний" value="—" hint="недостаточно данных" tone="green" />
+          <StatCard icon={AlertTriangle} label="Дефицитных ингредиентов" value={products.filter(p => p.amount <= 0).length} hint="по текущим остаткам" tone="red" />
+          <StatCard icon={Ban} label="Прогноз стоп-листа" value="—" hint="нужны рецептуры и история" tone="purple" />
         </div>
         <div className="analytics-grid">
           <section className="panel">
             <SectionTitle title="Списания по категориям" subtitle={`Период: ${range.toLowerCase()}`} />
-            {[['Овощи', 42, 'purple'], ['Мясо', 28, 'pink'], ['Молочные продукты', 18, 'blue'], ['Фрукты', 7, 'orange'], ['Прочее', 5, 'green']].map(([name, v, c]) => (
-              <div className="bar-row" key={name}>
-                <span>{name}</span>
-                <div className="bar-track">
-                  <div className={`bar-fill ${c}`} style={{ width: `${v}%` }} />
-                </div>
-                <strong>{v}%</strong>
-              </div>
-            ))}
+            <EmptyState text="Нет данных о списаниях за выбранный период." />
           </section>
           <section className="panel">
             <SectionTitle title="Потребность в поставках" subtitle="По текущим остаткам" />
@@ -814,7 +784,7 @@ export default function App() {
               <label>Роль<select value={newUser.role} onChange={e => setNewUser(v => ({ ...v, role: e.target.value }))}><option value="employee">Сотрудник</option><option value="admin">Администратор</option></select></label>
               <button className="button primary" type="submit"><Plus size={16} /> Зарегистрировать</button>
             </form>
-            <div className="admin-users-list">{users.map(user => <div className="admin-user-row" key={user.email}><span><strong>{user.name}</strong><small>{user.email}</small></span><Status tone={user.role === 'admin' ? 'purple' : 'green'}>{user.role === 'admin' ? 'Администратор' : 'Сотрудник'}</Status></div>)}</div>
+            <div className="admin-users-list">{users.map(user => <div className="admin-user-row" key={user.email}><span><strong>{user.name || user.email.split('@')[0]}</strong><small>{user.email}</small></span><Status tone={user.role === 'admin' ? 'purple' : 'green'}>{user.role === 'admin' ? 'Администратор' : 'Сотрудник'}</Status></div>)}</div>
           </section>}
           <div className="settings-info">
             <CircleHelp size={19} />
@@ -863,6 +833,7 @@ export default function App() {
           </section>
         </>
       ); 
+      case 'Блюда': return Dishes();
       case 'Склад': return Warehouse(); 
       case 'Сроки годности': return Expiry(); 
       case 'Стоп-лист': return StopList(); 
@@ -875,10 +846,10 @@ export default function App() {
 
   return (
     <div className="app-shell">
-      <aside className={`sidebar ${mobileNav ? 'sidebar-open' : ''}`}>
+        <aside className={`sidebar ${mobileNav ? 'sidebar-open' : ''}`}>
         <div className="brand">
           <div className="brand-mark">
-            <ChefHat size={26} />
+            <img src="/images/MLP.jpg" alt="MLP" />
           </div>
           <div>
             <strong>MLP</strong>
@@ -893,7 +864,7 @@ export default function App() {
             <button key={label} className={`nav-item ${active === label ? 'active' : ''}`} onClick={() => changePage(label)}>
               <Icon size={19} />
               <span>{label}</span>
-              {label === 'Стоп-лист' && <span className="nav-count">3</span>}
+              {label === 'Стоп-лист' && <span className="nav-count">{stopItems.length}</span>}
             </button>
           ))}
         </nav>
@@ -901,14 +872,14 @@ export default function App() {
           <div className="online-dot" />
           <div>
             <strong>Система работает</strong>
-            <span>Обновлено в 14:32</span>
+            <span>Обновлено в {currentTime}</span>
           </div>
         </div>
         <div className="profile">
-          <div className="avatar">А</div>
+          <div className="avatar">{userInitials}</div>
           <div>
-            <strong>Алексей Иванов</strong>
-            <span>Администратор</span>
+            <strong>{userName}</strong>
+            <span>{userRole}</span>
           </div>
           <button className="icon-button" aria-label="Выйти" onClick={() => { setSignedIn(false); setCurrentUser(null); try { localStorage.removeItem('vkus-balans-signed-in'); localStorage.removeItem('vkus-balans-current-user'); } catch {} }}>
             <LogOut size={16} />
@@ -946,10 +917,10 @@ export default function App() {
               <Bell size={19} />
               {notificationItems.length > 0 && <i />}
             </button>
-            <div className="top-avatar">АИ</div>
+            <div className="top-avatar">{userInitials}</div>
             <div className="user-label">
-              <strong>Алексей</strong>
-              <span>Администратор</span>
+              <strong>{userName}</strong>
+              <span>{userRole}</span>
             </div>
           </div>
         </header>
@@ -1019,22 +990,22 @@ export default function App() {
             const email = login.email.trim().toLowerCase();
             const storedUsers = getInitialUsers();
             if (authMode === 'register') { setAuthError('Регистрация доступна только администратору после входа в систему.'); return; }
-            const foundUser = storedUsers.find(u => u.email.toLowerCase() === email && (u.role === 'admin' ? !login.password.trim() : u.password === login.password));
+            const foundUser = storedUsers.find(u => u.email.toLowerCase() === email && (u.role === 'admin' && !u.password ? !login.password.trim() : u.password === login.password));
             if (!foundUser) { setAuthError('Неверная почта или пароль.'); return; }
             setCurrentUser(foundUser);
             try { localStorage.setItem('vkus-balans-signed-in', 'true'); localStorage.setItem('vkus-balans-current-user', email); } catch {}
             setSignedIn(true); notify('Вы вошли в систему');
           }}>
-            <div className="auth-logo"><ChefHat size={30} /></div>
+            <div className="auth-logo"><img src="/images/MLP.jpg" alt="MLP" /></div>
             <span className="eyebrow">MLP</span>
             <h1>{authMode === 'register' ? 'Создать аккаунт' : 'С возвращением!'}</h1>
-            <p>Войдите в систему. Регистрацию сотрудников выполняет администратор.</p>
-            <p className="auth-admin-note">Демо-доступ администратора: <strong>admin@vkusbalans.ru</strong>, пароль не требуется.</p>
+            <p>Войдите в систему под своей учётной записью.</p>
+            
                         <label>Электронная почта<input type="email" required value={login.email} onChange={e => setLogin(v => ({ ...v, email: e.target.value }))} placeholder="name@example.com" /></label>
             <label>Пароль<input type="password" value={login.password} onChange={e => setLogin(v => ({ ...v, password: e.target.value }))} placeholder="Минимум 4 символа" /></label>
             {authError && <p className="auth-error" role="alert">{authError}</p>}
             <button className="button primary full" type="submit">Войти в систему</button>
-            <small>Демо-режим: учётные записи хранятся в этом браузере. Для защиты в рабочей системе требуется серверная авторизация.</small>
+            <small>Учётные записи этого прототипа хранятся в текущем браузере. Для рабочей системы подключите серверную авторизацию.</small>
           </form>
         </div>
       )}
@@ -1046,7 +1017,7 @@ export default function App() {
               <div>
                 <span className="eyebrow">MLP</span>
                 <h2 id="modal-title">
-                  {modal === 'product' ? 'Добавить продукт' : modal === 'order' ? 'Новый заказ' : 'Новая поставка'}
+                  {modal === 'product' ? 'Добавить продукт' : modal === 'dish' ? 'Добавить блюдо' : modal === 'order' ? 'Новый заказ' : 'Новая поставка'}
                 </h2>
               </div>
               <button className="icon-button" onClick={() => setModal('')} aria-label="Закрыть">
@@ -1102,16 +1073,37 @@ export default function App() {
                   <Plus size={16} /> Добавить на склад
                 </button>
               </form>
+            ) : modal === 'dish' ? (
+              currentUser?.role === 'admin' ? <form onSubmit={addDish} className="modal-form">
+                <label>Название блюда<input autoFocus required value={dishForm.name} onChange={e => setDishForm(v => ({ ...v, name: e.target.value }))} placeholder="Например, Паста с курицей" /></label>
+                <label>Описание<textarea value={dishForm.description} onChange={e => setDishForm(v => ({ ...v, description: e.target.value }))} placeholder="Краткое описание блюда" rows="2" /></label>
+                <label>Состав / ингредиенты<textarea value={dishForm.ingredients} onChange={e => setDishForm(v => ({ ...v, ingredients: e.target.value }))} placeholder="Перечислите ингредиенты" rows="2" /></label>
+                <div className="form-row">
+                  <label>Категория<select value={dishForm.category} onChange={e => setDishForm(v => ({ ...v, category: e.target.value }))}><option>Основное</option><option>Салаты</option><option>Супы</option><option>Пицца</option><option>Десерты</option><option>Напитки</option><option>Гарниры</option></select></label>
+                  <label>Цена, ₽ <input type="number" min="0" step="0.01" value={dishForm.price} onChange={e => setDishForm(v => ({ ...v, price: e.target.value }))} placeholder="Необязательно" /></label>
+                </div>
+                <p className="form-section-label">КБЖУ на 100 г</p>
+                <div className="form-row">
+                  <label>Калории, ккал<input required type="number" min="0" step="0.1" value={dishForm.kcal} onChange={e => setDishForm(v => ({ ...v, kcal: e.target.value }))} /></label>
+                  <label>Белки, г<input required type="number" min="0" step="0.1" value={dishForm.protein} onChange={e => setDishForm(v => ({ ...v, protein: e.target.value }))} /></label>
+                </div>
+                <div className="form-row">
+                  <label>Жиры, г<input required type="number" min="0" step="0.1" value={dishForm.fat} onChange={e => setDishForm(v => ({ ...v, fat: e.target.value }))} /></label>
+                  <label>Углеводы, г<input required type="number" min="0" step="0.1" value={dishForm.carbs} onChange={e => setDishForm(v => ({ ...v, carbs: e.target.value }))} /></label>
+                </div>
+                <p className="form-hint">Фото необязательно: блюдо появится с нейтральной иконкой. Новая запись сохраняется в этом браузере.</p>
+                <button className="button primary full" type="submit"><Plus size={16} /> Добавить в меню</button>
+              </form> : <EmptyState text="Добавлять блюда может только администратор." />
             ) : modal === 'order' ? (
               <div className="modal-form order-builder">
                 <p>Выберите блюда и укажите количество для нового заказа.</p>
                 <div className="order-dish-list">
-                  {menuDishes.map(dish => (
+                  {normalizedDishes.map(dish => (
                     <article className={`order-dish ${selectedDishes[dish.id] ? 'is-selected' : ''}`} key={dish.id}>
-                     <img className="order-dish-emoji" src={dish.image} alt={dish.name} />
+                     {dish.image ? <img className="order-dish-emoji" src={dish.image} alt={dish.name} /> : <span className="order-dish-placeholder"><ChefHat size={22} /></span>}
                       <div className="order-dish-info">
                         <strong>{dish.name}</strong>
-                        <small>{money(dish.price)} · {dish.priority}</small>
+                        <small>{dish.price == null ? 'Цена не указана' : money(dish.price)} · {dish.category || 'Блюдо'}</small>
                       </div>
                       <div className="quantity-control">
                         <button 
@@ -1138,7 +1130,7 @@ export default function App() {
                   <span>Выбрано блюд: <strong>{selectedDishCount}</strong></span>
                   <span>Итого: <strong>{money(selectedDishTotal)}</strong></span>
                 </div>
-                <p className="form-hint">Демонстрационный режим: наличие ингредиентов и списание со склада подключаются через API.</p>
+                <p className="form-hint">Проверка ингредиентов и списание со склада выполняются после подключения серверной логики.</p>
                 <button className="button primary full" onClick={createOrder}>
                   <Check size={16} /> Создать заказ
                 </button>
