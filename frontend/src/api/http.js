@@ -1,8 +1,20 @@
-// Единый HTTP-клиент фронтенда. Вход выполняется через Basic Auth; пароль хранится только в памяти вкладки.
-let credentials = null;
+// Единый HTTP-клиент фронтенда. Basic Auth нужен каждому запросу.
+// sessionStorage сохраняет вход после обновления страницы, но очищается при закрытии вкладки.
+const STORAGE_KEY = 'mlp-api-credentials';
+function readCredentials() {
+  try { const raw = sessionStorage.getItem(STORAGE_KEY); return raw ? JSON.parse(raw) : null; }
+  catch { return null; }
+}
+let credentials = readCredentials();
 
-export function setApiCredentials(username, password) { credentials = { username, password }; }
-export function clearApiCredentials() { credentials = null; }
+export function setApiCredentials(username, password) {
+  credentials = { username, password };
+  try { sessionStorage.setItem(STORAGE_KEY, JSON.stringify(credentials)); } catch {}
+}
+export function clearApiCredentials() {
+  credentials = null;
+  try { sessionStorage.removeItem(STORAGE_KEY); } catch {}
+}
 
 export async function apiRequest(path, options = {}) {
   const baseUrl = String(import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
