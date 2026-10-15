@@ -40,6 +40,25 @@ const productImageFor = (name = '') => {
   return '/images/placeholder.svg';
 };
 const normalizeName = value => String(value || '').trim().toLocaleLowerCase('ru-RU');
+const orderStatusLabel = status => ({
+  CREATED: 'Принят', NEW: 'Новый', PENDING: 'Ожидает подтверждения', CONFIRMED: 'Подтверждён',
+  IN_PROGRESS: 'Готовится', PREPARING: 'Готовится', READY: 'Готов к выдаче', COMPLETED: 'Выполнен',
+  CANCELLED: 'Отменён', CANCELED: 'Отменён', CANCELLED_OUT_OF_STOCK: 'Отклонён: нет остатков',
+  REJECTED: 'Отклонён', FAILED: 'Ошибка'
+})[String(status || '').toUpperCase()] || status || 'Не указан';
+const supplyStatusLabel = status => ({
+  CREATED: 'Оформлена', NEW: 'Оформлена', PENDING: 'Ожидает подтверждения', CONFIRMED: 'Подтверждена',
+  APPROVED: 'Подтверждена', PROCESSING: 'Комплектуется', PACKING: 'Комплектуется', SHIPPED: 'Отправлена',
+  IN_TRANSIT: 'В пути', DELIVERED: 'Доставлена', RECEIVED: 'Принята на склад', COMPLETED: 'Завершена',
+  CANCELLED: 'Отменена', CANCELED: 'Отменена', REJECTED: 'Отклонена'
+})[String(status || '').toUpperCase()] || status || 'Не указан';
+const statusTone = status => {
+  const value = String(status || '').toLocaleLowerCase('ru-RU');
+  if (/выполнен|заверш|доставлен|принята на склад|в норме|готов к выдаче/.test(value)) return 'green';
+  if (/отмен|отклон|ошибка|нет остатков|просроч/.test(value)) return 'red';
+  if (/пути|отправ|готовится|комплект|обработк|подтверждён/.test(value)) return 'blue';
+  return 'amber';
+};
 const productCategoryFor = (name = '') => {
   const n = String(name).toLowerCase();
   if (/молок|сыр|сметан|сливк|йогурт|творог|моцарел/.test(n)) return 'Молочные продукты';
@@ -50,7 +69,7 @@ const productCategoryFor = (name = '') => {
 
 function Status({ children, tone }) { 
   return (
-    <span className={`status ${tone || (children === 'Доставлен' || children === 'Доставлена' || children === 'В норме' ? 'green' : children === 'Отменён' || children === 'Просрочен' ? 'red' : 'amber')}`}>
+    <span className={`status ${tone || statusTone(children)}`}>
       {children}
     </span>
   ); 
@@ -303,7 +322,7 @@ export default function App() {
     setOrders(orderResponse.map(order => ({
       id: order.id, orderNumber: order.orderNumber, date: formatDate(order.createdAt),
       dishes: (order.items || []).reduce((sum, item) => sum + Number(item.quantity || 0), 0),
-      status: ({ CREATED: 'В обработке', COMPLETED: 'Завершён', CANCELLED_OUT_OF_STOCK: 'Отказ: нет остатков' })[order.status] || order.status,
+      status: orderStatusLabel(order.status),
       amount: (order.items || []).reduce((sum, item) => sum + Number(dishById.get(Number(item.dishId))?.price || 0) * Number(item.quantity || 0), 0),
       rawStatus: order.status, items: order.items || []
     })));
@@ -322,7 +341,7 @@ export default function App() {
       }));
       return {
         id, supplier: readStorage('mlp-supply-display-metadata', {})[id] || supplyMetadata[id] || '—', date: formatDate(supply.createdAt),
-        amount: Number(supply.totalQuantity || 0), status: supply.status === 'RECEIVED' ? 'Доставлена' : (supply.status || 'Принята'),
+        amount: Number(supply.totalQuantity || 0), status: supplyStatusLabel(supply.status), rawStatus: supply.status,
         items, itemCount: supply.itemCount
       };
     }));
@@ -985,9 +1004,9 @@ export default function App() {
         </div>
         <div className="stats-grid">
           <StatCard icon={Trash2} label="Списано продуктов" value={writeOffs.reduce((sum, item) => sum + Number(item.totalQuantity || 0), 0).toLocaleString('ru-RU')} hint={`${writeOffs.length} позиций в отчёте`} tone="orange" />
-          <StatCard icon={ChartNoAxesCombined} label="Доля списаний" value="—" hint="доля списаний не входит в текущий API" tone="green" />
+          <StatCard icon={ChartNoAxesCombined} label="Доля списаний" value={(() => { const total = products.reduce((sum, p) => sum + Math.max(0, Number(p.amount || 0)), 0); const written = writeOffs.reduce((sum, item) => sum + Math.max(0, Number(item.totalQuantity || 0)), 0); return total + written > 0 ? `${Math.round(written / (total + written) * 100)}%` : "—"; })()} hint="списания относительно доступного остатка и списанного объёма" tone="green" />
           <StatCard icon={AlertTriangle} label="Дефицитных ингредиентов" value={products.filter(p => p.amount <= 0).length} hint="по текущим остаткам" tone="red" />
-          <StatCard icon={Ban} label="Прогноз стоп-листа" value="—" hint="нужны рецептуры и история" tone="purple" />
+          <StatCard icon={Ban} label="Прогноз стоп-листа" value={stopItems.length} hint="блюд сейчас в стоп-листе" tone="purple" />
         </div>
         <div className="analytics-grid">
           <section className="panel">

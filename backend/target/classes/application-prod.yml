@@ -1,0 +1,22 @@
+spring:
+  datasource:
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+server:
+  port: ${PORT:10000}
+  address: 0.0.0.0
+  forward-headers-strategy: framework
+
+# API timing diagnostics. Keep application logs concise and searchable in Render.
+logging:
+  level:
+    ru.flagman.monitoring.diagnostics.ApiTimingFilter: INFO
