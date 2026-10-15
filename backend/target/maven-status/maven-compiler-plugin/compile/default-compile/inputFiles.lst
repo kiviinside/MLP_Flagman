@@ -9,6 +9,7 @@ C:\Users\USER\Documents\MLP_Flagman\backend\src\main\java\ru\flagman\monitoring\
 C:\Users\USER\Documents\MLP_Flagman\backend\src\main\java\ru\flagman\monitoring\controller\StopListController.java
 C:\Users\USER\Documents\MLP_Flagman\backend\src\main\java\ru\flagman\monitoring\controller\SupplyController.java
 C:\Users\USER\Documents\MLP_Flagman\backend\src\main\java\ru\flagman\monitoring\controller\WarehouseController.java
+C:\Users\USER\Documents\MLP_Flagman\backend\src\main\java\ru\flagman\monitoring\diagnostics\ApiTimingFilter.java
 C:\Users\USER\Documents\MLP_Flagman\backend\src\main\java\ru\flagman\monitoring\dto\BatchDto.java
 C:\Users\USER\Documents\MLP_Flagman\backend\src\main\java\ru\flagman\monitoring\dto\CatalogDtos.java
 C:\Users\USER\Documents\MLP_Flagman\backend\src\main\java\ru\flagman\monitoring\dto\DashboardDto.java

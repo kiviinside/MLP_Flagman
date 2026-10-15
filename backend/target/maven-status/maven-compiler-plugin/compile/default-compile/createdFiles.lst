@@ -61,6 +61,7 @@ ru\flagman\monitoring\dto\SupplyRequest.class
 ru\flagman\monitoring\service\MonitoringService.class
 ru\flagman\monitoring\service\CatalogService.class
 ru\flagman\monitoring\dto\SupplySummaryDto.class
+ru\flagman\monitoring\diagnostics\ApiTimingFilter.class
 ru\flagman\monitoring\config\DemoDataLoader.class
 ru\flagman\monitoring\model\Order.class
 ru\flagman\monitoring\model\OrderItem.class

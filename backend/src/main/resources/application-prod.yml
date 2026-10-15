@@ -15,3 +15,8 @@ server:
   port: ${PORT:10000}
   address: 0.0.0.0
   forward-headers-strategy: framework
+
+# API timing diagnostics. Keep application logs concise and searchable in Render.
+logging:
+  level:
+    ru.flagman.monitoring.diagnostics.ApiTimingFilter: INFO
