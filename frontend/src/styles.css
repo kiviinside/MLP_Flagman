@@ -4163,3 +4163,39 @@ html[data-theme="light"] .optional-field { color: #706783; font-size: 11px; font
     font-size: 8px;
   }
 }
+
+/* Точечные исправления системной темы и карточек блюд */
+html[data-theme="system"] .admin-users-panel,
+html[data-theme="system"] .admin-users-panel * { color: #302747; }
+html[data-theme="system"] .admin-users-panel .admin-user-form input,
+html[data-theme="system"] .admin-users-panel .admin-user-form select { color: #302747 !important; background: #fff !important; }
+html[data-theme="system"] .admin-users-panel .admin-user-form input::placeholder { color: #817891 !important; }
+html[data-theme="system"] .admin-users-panel .admin-users-heading p,
+html[data-theme="system"] .admin-users-panel .admin-user-row small { color: #6f667e; }
+.dish-card-clickable { cursor: pointer; }
+.dish-card-clickable:focus-visible { outline: 3px solid #9b7cff; outline-offset: 3px; }
+.dish-open-hint { display: inline-block; margin-top: 10px; font-size: 12px; font-weight: 700; color: #7455c7; }
+.dish-photo-preview { display: block; width: 100%; max-height: 180px; object-fit: cover; border-radius: 12px; }
+@media (max-width: 850px) {
+  .table-wrap { overflow: visible !important; }
+  .table-wrap table { display: table; width: 100%; min-width: 0 !important; table-layout: fixed; }
+  .table-wrap th, .table-wrap td { white-space: normal !important; overflow-wrap: anywhere; word-break: break-word; }
+}
+@media (max-width: 560px) {
+  .table-wrap table, .table-wrap tbody, .table-wrap tr { width: 100%; }
+  .table-wrap th, .table-wrap td { padding: 6px 3px !important; font-size: 10px !important; }
+}
+
+/* Последние правки интерфейса: кликабельный профиль и заявки на списание. */
+.top-profile-button { display: flex; align-items: center; gap: 10px; border: 0; background: transparent; color: inherit; padding: 0; cursor: pointer; text-align: left; }
+.top-profile-button:hover .user-label strong { text-decoration: underline; }
+.writeoff-list { display: grid; gap: 12px; }
+.writeoff-card { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; padding: 16px; border: 1px solid var(--line); border-radius: 16px; }
+.writeoff-card-main { min-width: 0; display: grid; gap: 6px; }
+.writeoff-card-main p { margin: 0; color: var(--muted); overflow-wrap: anywhere; }
+.writeoff-card-main small { color: var(--muted); }
+.writeoff-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+.profile-detail { display: flex; align-items: center; gap: 16px; margin: 12px 0 24px; }
+.profile-detail .top-avatar { flex: 0 0 54px; width: 54px; height: 54px; display: grid; place-items: center; border-radius: 50%; background: var(--purple-soft); color: var(--purple); font-weight: 800; }
+.profile-detail p { color: var(--muted); margin: 5px 0 10px; overflow-wrap: anywhere; }
+@media (max-width: 620px) { .writeoff-card { flex-direction: column; } .writeoff-actions { justify-content: flex-start; } .top-profile-button .user-label { display: none; } }

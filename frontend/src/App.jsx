@@ -20,6 +20,7 @@ const nav = [
   ['Стоп-лист', Ban], 
   ['Горячие предложения', Flame], 
   ['Аналитика', ChartNoAxesCombined], 
+  ['Списания', Trash2],
   ['Настройки', Settings]
 ];
 
@@ -83,7 +84,7 @@ function StatCard({ icon: Icon, label, value, hint, tone = 'purple' }) {
         <strong>{value}</strong>
         <small>{hint}</small>
       </div>
-      <ArrowUpRight className="stat-arrow" size={16} />
+
     </article>
   ); 
 }
@@ -110,6 +111,12 @@ export default function App() {
   }, [theme]);
   
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [readNotificationIds, setReadNotificationIds] = useState(() => readStorage('mlp-read-notifications', []));
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [writeOffRequests, setWriteOffRequests] = useState(() => readStorage('mlp-writeoff-requests', []));
+  const [writeOffForm, setWriteOffForm] = useState({ productId: '', quantity: '', reason: 'Порча и брак', comment: '' });
+  useEffect(() => { try { localStorage.setItem('mlp-writeoff-requests', JSON.stringify(writeOffRequests)); } catch {} }, [writeOffRequests]);
+  useEffect(() => { try { localStorage.setItem('mlp-read-notifications', JSON.stringify(readNotificationIds)); } catch {} }, [readNotificationIds]);
   const [signedIn, setSignedIn] = useState(false);
     const [authError, setAuthError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -143,6 +150,7 @@ export default function App() {
   const [modal, setModal] = useState('');
   const [notice, setNotice] = useState('');
   const [selectedHotDish, setSelectedHotDish] = useState(null);
+  const [dishPhoto, setDishPhoto] = useState('');
   const [filter, setFilter] = useState('Все');
   const [range, setRange] = useState('7 дней');
   const [settings, setSettings] = useState(() => {
@@ -502,14 +510,15 @@ export default function App() {
       const metadata = {
         description: dishForm.description.trim(), ingredients: dishForm.ingredients.trim(), category: dishForm.category,
         price: Number(dishForm.price || 0), kcal: Number(dishForm.kcal), protein: Number(dishForm.protein),
-        fat: Number(dishForm.fat), carbs: Number(dishForm.carbs), image: ''
+        fat: Number(dishForm.fat), carbs: Number(dishForm.carbs), image: dishPhoto
       };
-      const nextMetadata = { ...readStorage('mlp-dish-display-metadata', {}), [String(created.id)]: metadata };
+      const nextMetadata = { ...readStorage('mlp-dish-display-metadata', {}), [String(created.id)]: { ...metadata, image: dishPhoto || metadata.image || '' } };
       try { localStorage.setItem('mlp-dish-display-metadata', JSON.stringify(nextMetadata)); } catch {}
       setDishMetadata(nextMetadata);
       await loadData();
       setDishForm({ name: '', description: '', ingredients: '', category: 'Основное', price: '', kcal: '', protein: '', fat: '', carbs: '' });
       setDishRecipeItems([{ productId: '', requiredQuantity: '0.1' }]);
+      setDishPhoto('');
       setModal(''); notify(`Блюдо «${created.name}» и его техкарта сохранены на сервере`);
     } catch (error) { notify(error.message || 'Не удалось добавить блюдо'); }
   };
@@ -641,6 +650,11 @@ export default function App() {
     })),
     ...(orders.length ? [{ id: 'orders', title: 'Заказы ресторана', text: `Всего заказов: ${orders.length}`, tone: 'purple' }] : [])
   ];
+
+  const unreadNotificationCount = notificationItems.filter(item => !readNotificationIds.includes(item.id)).length;
+  const openNotifications = () => { setNotificationsOpen(v => { if (!v) setReadNotificationIds(ids => [...new Set([...ids, ...notificationItems.map(item => item.id)])]); return !v; }); };
+  const submitWriteOff = e => { e.preventDefault(); const product = products.find(p => String(p.id) === String(writeOffForm.productId)); if (!product || Number(writeOffForm.quantity) <= 0) { notify('Выберите продукт и укажите количество'); return; } if (Number(writeOffForm.quantity) > Number(product.amount)) { notify('Количество превышает доступный остаток'); return; } const request = { id: `wo-${Date.now()}`, productId: product.id, product: product.name, unit: product.unit, quantity: Number(writeOffForm.quantity), reason: writeOffForm.reason, comment: writeOffForm.comment.trim(), requestedBy: userName, createdAt: new Date().toISOString(), status: 'Ожидает подтверждения' }; setWriteOffRequests(rows => [request, ...rows]); setWriteOffForm({ productId: '', quantity: '', reason: 'Порча и брак', comment: '' }); setModal(''); notify('Заявка на списание отправлена администратору'); };
+  const decideWriteOff = (id, approved) => { const request = writeOffRequests.find(row => row.id === id); if (!request || request.status !== 'Ожидает подтверждения') return; if (approved) { const product = products.find(p => String(p.id) === String(request.productId)); if (!product || Number(product.amount) < request.quantity) { notify('Недостаточно остатка для подтверждения'); return; } setProducts(rows => rows.map(p => String(p.id) === String(request.productId) ? { ...p, amount: Math.max(0, Number(p.amount) - request.quantity) } : p)); setStockBatches(rows => rows.map(p => String(p.id) === String(request.productId) ? { ...p, amount: Math.max(0, Number(p.amount) - request.quantity) } : p)); notify('Заявка подтверждена, локальный остаток уменьшен. Для постоянного учёта подключите API списания.'); } setWriteOffRequests(rows => rows.map(row => row.id === id ? { ...row, status: approved ? 'Подтверждена' : 'Отклонена', reviewedBy: userName, reviewedAt: new Date().toISOString() } : row)); };
 
   function Dashboard() { 
     return (
@@ -874,7 +888,7 @@ export default function App() {
         </div>
         {menuDishes.length === 0 ? <EmptyState text="В меню пока нет блюд." /> : <div className="dish-grid catalog-dish-grid">
           {normalizedDishes.map(dish => (
-            <article className="dish-card" key={dish.id}>
+            <article className="dish-card dish-card-clickable" key={dish.id} onClick={() => setSelectedHotDish(dish)} role="button" tabIndex={0} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedHotDish(dish); } }}>
               <div className="dish-art catalog-dish-art">
                 {dish.image ? <img className="dish-art-img" src={dish.image} alt={dish.name} loading="lazy" /> : <ChefHat size={42} aria-label="Без изображения" />}
                 <span className="dish-category-label">{dish.category || 'Блюдо'}</span>
@@ -889,11 +903,12 @@ export default function App() {
                   <span>Ж <strong>{dish.fat ?? '—'}</strong> г</span>
                   <span>У <strong>{dish.carbs ?? '—'}</strong> г</span>
                 </div>
-                {dish.ingredients && <details className="dish-ingredients"><summary>Состав блюда</summary><p>{dish.ingredients}</p></details>}
+                <span className="dish-open-hint">Нажмите, чтобы открыть фото и подробности</span>
               </div>
             </article>
           ))}
         </div>}
+        {selectedHotDish && createPortal(<div className="dish-modal-backdrop" onClick={() => setSelectedHotDish(null)}><section className="dish-modal" role="dialog" aria-modal="true" aria-label={selectedHotDish.name} onClick={e => e.stopPropagation()}><button className="dish-modal-close" aria-label="Закрыть" onClick={() => setSelectedHotDish(null)}><X size={22} /></button>{selectedHotDish.image ? <img className="dish-modal-image" src={selectedHotDish.image} alt={selectedHotDish.name} /> : <div className="dish-modal-image dish-modal-placeholder"><ChefHat size={48} /></div>}<div className="dish-modal-content"><span className="dish-modal-kicker">ИНФОРМАЦИЯ О БЛЮДЕ</span><h2>{selectedHotDish.name}</h2><p>{selectedHotDish.description || 'Описание не добавлено.'}</p><h3>Ингредиенты</h3><p>{selectedHotDish.ingredients || 'Состав не указан.'}</p><h3>КБЖУ на 100 г</h3><div className="dish-nutrition"><div><span>Калории</span><strong>{selectedHotDish.kcal ?? '—'} ккал</strong></div><div><span>Белки</span><strong>{selectedHotDish.protein ?? '—'} г</strong></div><div><span>Жиры</span><strong>{selectedHotDish.fat ?? '—'} г</strong></div><div><span>Углеводы</span><strong>{selectedHotDish.carbs ?? '—'} г</strong></div></div></div></section></div>, document.body)}
         <p className="dish-disclaimer catalog-disclaimer">КБЖУ указано на 100 г. Для блюд из исходного меню значения ориентировочные; для новых блюд их вводит администратор.</p>
       </>
     );
@@ -999,6 +1014,12 @@ export default function App() {
       </>
     ); 
   }
+
+  function WriteOffsPage() { return (<>
+    <SectionTitle title="Списания" subtitle="Сотрудники отправляют заявки, администратор проверяет и принимает решение." />
+    <div className="toolbar"><span className="toolbar-note"><ClipboardList size={18} /> {writeOffRequests.length} заявок</span><button className="button primary" onClick={() => openModal('writeoff')}><Plus size={16} /> Заявка на списание</button></div>
+    <section className="panel"><div className="writeoff-list">{writeOffRequests.length ? writeOffRequests.map(item => <article className="writeoff-card" key={item.id}><div className="writeoff-card-main"><strong>{item.product} · {item.quantity} {item.unit}</strong><p>{item.reason}{item.comment ? ` — ${item.comment}` : ''}</p><small>Создал: {item.requestedBy} · {new Date(item.createdAt).toLocaleString('ru-RU')}</small>{item.reviewedBy && <small>Решение: {item.reviewedBy}</small>}</div><div className="writeoff-actions"><Status tone={item.status === 'Подтверждена' ? 'green' : item.status === 'Отклонена' ? 'red' : 'amber'}>{item.status}</Status>{currentUser?.role === 'admin' && item.status === 'Ожидает подтверждения' && <><button className="button primary small" onClick={() => decideWriteOff(item.id, true)}><Check size={14}/> Подтвердить</button><button className="button secondary small" onClick={() => decideWriteOff(item.id, false)}>Отклонить</button></>}</div></article>) : <EmptyState text="Заявок на списание пока нет." />}</div><p className="form-hint">Подтверждения сохраняются в этом браузере. Для фактического списания из складского остатка необходимо подключить серверный API.</p></section>
+  </>); }
 
   function SettingsPage() { 
     return (
@@ -1109,6 +1130,7 @@ export default function App() {
       case 'Стоп-лист': return StopList(); 
       case 'Горячие предложения': return HotOffers(); 
       case 'Аналитика': return Analytics(); 
+      case 'Списания': return WriteOffsPage();
       case 'Настройки': return SettingsPage(); 
       default: return Dashboard(); 
     } 
@@ -1181,16 +1203,12 @@ export default function App() {
               className={`icon-button notification ${notificationsOpen ? 'notification-active' : ''}`} 
               aria-label="Открыть уведомления" 
               aria-expanded={notificationsOpen} 
-              onClick={() => setNotificationsOpen(v => !v)}
+              onClick={openNotifications}
             >
               <Bell size={19} />
-              {notificationItems.length > 0 && <i />}
+              {unreadNotificationCount > 0 && <i />}
             </button>
-            <div className="top-avatar">{userInitials}</div>
-            <div className="user-label">
-              <strong>{userName}</strong>
-              <span>{userRole}</span>
-            </div>
+            <button className="top-profile-button" onClick={() => setProfileOpen(true)} aria-label="Открыть профиль"><span className="top-avatar">{userInitials}</span><span className="user-label"><strong>{userName}</strong><span>{userRole}</span></span></button>
           </div>
         </header>
         
@@ -1198,7 +1216,7 @@ export default function App() {
           {pageContent()}
           <footer className="footer">
             <span>© {today.getFullYear()} MLP</span>
-            <span>Контроль запасов с заботой о качестве <span className="footer-heart">♥</span></span>
+            <span>Контроль запасов с заботой о качестве</span>
           </footer>
         </div>
       </main>
@@ -1211,7 +1229,7 @@ export default function App() {
               <div>
                 <span className="eyebrow">ЦЕНТР СОБЫТИЙ</span>
                 <h2>Уведомления</h2>
-                <p>{notificationItems.length} событий требуют внимания</p>
+                <p>{unreadNotificationCount} непрочитанных · {notificationItems.length} всего</p>
               </div>
               <button className="icon-button" onClick={() => setNotificationsOpen(false)} aria-label="Закрыть уведомления">
                 <X size={20} />
@@ -1269,6 +1287,8 @@ export default function App() {
         </div>
       )}
       
+      {profileOpen && <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) setProfileOpen(false); }}><section className="modal profile-modal" role="dialog" aria-modal="true" aria-label="Профиль пользователя"><div className="modal-head"><div><span className="eyebrow">АККАУНТ MLP</span><h2>Профиль</h2></div><button className="icon-button" onClick={() => setProfileOpen(false)} aria-label="Закрыть профиль"><X size={20}/></button></div><div className="profile-detail"><span className="top-avatar">{userInitials}</span><div><strong>{userName}</strong><p>{currentUser?.email || currentUser?.login || 'Учётная запись'}</p><Status tone={currentUser?.role === 'admin' ? 'purple' : 'green'}>{userRole}</Status></div></div><button className="button secondary full" onClick={() => { setProfileOpen(false); clearApiCredentials(); setSignedIn(false); setCurrentUser(null); setApiConnected(false); setProducts([]); setStockBatches([]); setOrders([]); setSupplies([]); setStopItems([]); setHotDishes([]); setWriteOffs([]); setUsers([]); }}> <LogOut size={16}/> Выйти из аккаунта</button></section></div>}
+
       {modal && (
         <div className="modal-backdrop" onMouseDown={e => { if(e.target === e.currentTarget) setModal(''); }}>
           <section className="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
@@ -1276,7 +1296,7 @@ export default function App() {
               <div>
                 <span className="eyebrow">MLP</span>
                 <h2 id="modal-title">
-                  {modal === 'product' ? 'Добавить продукт' : modal === 'dish' ? 'Добавить блюдо' : modal === 'order' ? 'Новый заказ' : 'Новая поставка'}
+                  {modal === 'product' ? 'Добавить продукт' : modal === 'dish' ? 'Добавить блюдо' : modal === 'order' ? 'Новый заказ' : modal === 'writeoff' ? 'Заявка на списание' : 'Новая поставка'}
                 </h2>
               </div>
               <button className="icon-button" onClick={() => setModal('')} aria-label="Закрыть">
@@ -1335,6 +1355,7 @@ export default function App() {
             ) : modal === 'dish' ? (
               currentUser?.role === 'admin' ? <form onSubmit={addDish} className="modal-form">
                 <label>Название блюда<input autoFocus required value={dishForm.name} onChange={e => setDishForm(v => ({ ...v, name: e.target.value }))} placeholder="Например, Паста с курицей" /></label>
+                <label>Фотография блюда<input type="file" accept="image/*" onChange={e => { const file = e.target.files?.[0]; if (!file) return; if (file.size > 2 * 1024 * 1024) { notify('Выберите изображение до 2 МБ'); e.target.value = ''; return; } const reader = new FileReader(); reader.onload = () => setDishPhoto(String(reader.result || '')); reader.readAsDataURL(file); }} /></label>{dishPhoto && <img className="dish-photo-preview" src={dishPhoto} alt="Предпросмотр блюда" />}
                 <label>Описание<textarea value={dishForm.description} onChange={e => setDishForm(v => ({ ...v, description: e.target.value }))} placeholder="Краткое описание блюда" rows="2" /></label>
                 <label>Состав / ингредиенты<textarea value={dishForm.ingredients} onChange={e => setDishForm(v => ({ ...v, ingredients: e.target.value }))} placeholder="Перечислите ингредиенты" rows="2" /></label>
                 <div className="form-row">
@@ -1372,13 +1393,13 @@ export default function App() {
                      {dish.image ? <img className="order-dish-emoji" src={dish.image} alt={dish.name} /> : <span className="order-dish-placeholder"><ChefHat size={22} /></span>}
                       <div className="order-dish-info">
                         <strong>{dish.name}</strong>
-                        <small>{dish.price == null ? 'Цена не указана' : money(dish.price)} · {dish.category || 'Блюдо'}</small>
+                        <small>{dish.price == null ? 'Цена не указана' : money(dish.price)} · {dish.category || 'Блюдо'}{!dish.backendId ? ' · недоступно для заказа' : ''}</small>
                       </div>
                       <div className="quantity-control">
                         <button 
                           type="button" 
                           aria-label={`Уменьшить ${dish.name}`} 
-                          disabled={!selectedDishes[dish.id]} 
+                          disabled={!selectedDishes[dish.id] || !dish.backendId} 
                           onClick={() => setSelectedDishes(prev => ({ ...prev, [dish.id]: Math.max(0, (prev[dish.id] || 0) - 1) }))}
                         >
                           −
@@ -1387,8 +1408,9 @@ export default function App() {
                         <button
                           type="button"
                           aria-label={`Добавить ${dish.name}`}
+                          disabled={false}
                           disabled={!dish.backendId}
-                          title={!dish.backendId ? 'Для заказа нужна серверная техкарта этого блюда' : undefined}
+                          title={!dish.backendId ? 'Это демонстрационная заглушка: сначала добавьте блюдо с серверной техкартой' : undefined}
                           onClick={() => setSelectedDishes(prev => ({ ...prev, [dish.id]: (prev[dish.id] || 0) + 1 }))}
                         >
                           +
@@ -1409,6 +1431,14 @@ export default function App() {
                   Отмена
                 </button>
               </div>
+            ) : modal === 'writeoff' ? (
+              <form className="modal-form" onSubmit={submitWriteOff}>
+                <label>Продукт<select required value={writeOffForm.productId} onChange={e => setWriteOffForm(v => ({ ...v, productId: e.target.value }))}><option value="">Выберите продукт</option>{products.filter(p => Number(p.amount) > 0).map(p => <option key={p.id} value={String(p.id)}>{p.name} — {p.amount} {p.unit}</option>)}</select></label>
+                <label>Количество<input required type="number" min="0.01" step="0.01" value={writeOffForm.quantity} onChange={e => setWriteOffForm(v => ({ ...v, quantity: e.target.value }))} /></label>
+                <label>Причина<select value={writeOffForm.reason} onChange={e => setWriteOffForm(v => ({ ...v, reason: e.target.value }))}><option>Порча и брак</option><option>Ошибки на кухне или в зале</option><option>Питание персонала</option></select></label>
+                <label>Комментарий<textarea rows="3" value={writeOffForm.comment} onChange={e => setWriteOffForm(v => ({ ...v, comment: e.target.value }))} placeholder="Например: блюдо пересолили или продукт повреждён" /></label>
+                <p className="form-hint">Заявка не меняет остатки до проверки администратором.</p><button className="button primary full" type="submit">Отправить на подтверждение</button>
+              </form>
             ) : (
               <form className="modal-form supply-form" onSubmit={addSupply}>
                 <label>Поставщик<input required value={supplyForm.supplier} onChange={e => setSupplyForm(f => ({ ...f, supplier: e.target.value }))} placeholder="Например, ООО «ФудПлюс»" /></label>
