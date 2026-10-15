@@ -3,6 +3,7 @@ package ru.flagman.monitoring.config;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -31,7 +32,27 @@ public class SecurityConfig {
             .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(a -> a
                 .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
-                .requestMatchers("/api/admin/**", "/api/supplies/**", "/api/analytics/**").hasRole("ADMIN")
+                // Preflight CORS не должен блокироваться проверкой роли.
+                .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                // Управление учётными записями всегда остаётся только у администратора.
+                .requestMatchers("/api/admin/users/**").hasRole("ADMIN")
+                // Сотрудникам нужен доступ на чтение каталога для работы с заказами,
+                // но любые изменения каталога остаются административными.
+                // Чтение блюд нужно сотрудникам для оформления заказов. Каталог продуктов
+                // пока остаётся ADMIN-only: текущий фронтенд использует GET /products
+                // как проверку роли при входе, поэтому расширять этот маршрут без фронта нельзя.
+                .requestMatchers(HttpMethod.GET,
+                    "/api/admin/dishes", "/api/admin/dishes/**")
+                    .hasAnyRole("ADMIN", "STAFF")
+                .requestMatchers("/api/admin/**").hasRole("ADMIN")
+                // История поставок доступна обеим ролям. Изменение статуса — обеим;
+                // регистрация новой поставки/приёмка пока остаётся за администратором.
+                .requestMatchers(HttpMethod.GET, "/api/supplies", "/api/supplies/**")
+                    .hasAnyRole("ADMIN", "STAFF")
+                .requestMatchers(HttpMethod.PATCH, "/api/supplies/**")
+                    .hasAnyRole("ADMIN", "STAFF")
+                .requestMatchers("/api/supplies/**").hasRole("ADMIN")
+                .requestMatchers("/api/analytics/**").hasRole("ADMIN")
                 .requestMatchers("/api/**").hasAnyRole("ADMIN", "STAFF")
                 .anyRequest().denyAll())
             .httpBasic(b -> b.authenticationEntryPoint((request, response, ex) -> {
@@ -39,6 +60,11 @@ public class SecurityConfig {
                 response.setStatus(401);
                 response.setContentType(MediaType.APPLICATION_JSON_VALUE);
                 response.getWriter().write("{\"error\":\"unauthorized\"}");
+            }))
+            .exceptionHandling(e -> e.accessDeniedHandler((request, response, ex) -> {
+                response.setStatus(403);
+                response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+                response.getWriter().write("{\"error\":\"forbidden\",\"message\":\"insufficient_permissions\"}");
             }));
         return http.build();
     }
