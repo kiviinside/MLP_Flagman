@@ -98,27 +98,6 @@ function EmptyState({ text }) {
 }
 
 export default function App() {
-  // На узком экране таблицы превращаются в карточки с подписями столбцов.
-  // Подписи берутся из настоящих заголовков, поэтому подходят разным таблицам.
-  useEffect(() => {
-    const labelTables = () => {
-      document.querySelectorAll('.table-wrap table').forEach(table => {
-        const labels = Array.from(table.querySelectorAll('thead th')).map(th => th.textContent.trim());
-        table.querySelectorAll('tbody tr').forEach(row => {
-          if (row.classList.contains('supply-items-row')) return;
-          Array.from(row.cells).forEach((cell, index) => {
-            if (cell.colSpan > 1) return;
-            const label = labels[index] || '';
-            if (label) cell.setAttribute('data-label', label);
-          });
-        });
-      });
-    };
-    labelTables();
-    const observer = new MutationObserver(labelTables);
-    observer.observe(document.body, { childList: true, subtree: true });
-    return () => observer.disconnect();
-  }, []);
   const [active, setActive] = useState('Главная');
   const [theme, setTheme] = useState(() => {
     try { return localStorage.getItem('vkus-balans-theme') || 'system'; } 
@@ -775,7 +754,30 @@ export default function App() {
               <strong>Товары на складе</strong>
               <span className="muted"> {filteredProducts.length} позиций</span>
             </div>
-            <button className="button secondary small" onClick={() => notify('Экспорт будет доступен после подключения сервера')}>
+            <button className="button secondary small" onClick={async () => {
+              try {
+                const to = new Date();
+                const from = new Date(to.getTime() - 30 * 24 * 60 * 60 * 1000);
+                const asLocalDateTime = value => {
+                  const pad = part => String(part).padStart(2, '0');
+                  return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}T${pad(value.getHours())}:${pad(value.getMinutes())}:${pad(value.getSeconds())}`;
+                };
+                const query = `from=${encodeURIComponent(asLocalDateTime(from))}&to=${encodeURIComponent(asLocalDateTime(to))}`;
+                const report = await apiRequest(`/api/analytics/export?${query}`);
+                const blob = new Blob([report], { type: 'text/csv;charset=UTF-8' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `warehouse-report-${to.toISOString().slice(0, 10)}.csv`;
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+                setTimeout(() => URL.revokeObjectURL(url), 1000);
+                notify('Отчёт склада успешно скачан');
+              } catch (error) {
+                notify(error?.status === 403 ? 'Нет доступа к экспорту отчёта. Проверьте роль пользователя.' : error?.message || 'Не удалось скачать отчёт склада');
+              }
+            }}>
               <Download size={15} /> Экспорт
             </button>
           </div>
@@ -1112,7 +1114,7 @@ export default function App() {
             <div className="admin-users-heading"><div><strong>Управление пользователями</strong><p>Создавать аккаунты сотрудников может только администратор.</p></div><Status tone="purple">Администратор</Status></div>
             <form className="admin-user-form" onSubmit={registerUser}>
               <label>Логин сотрудника<input required minLength="3" value={newUser.email} onChange={e => setNewUser(v => ({ ...v, email: e.target.value }))} placeholder="employee01" autoComplete="off" /></label>
-              <label>Пароль<input type="password" required minLength="12" value={newUser.password} onChange={e => setNewUser(v => ({ ...v, password: e.target.value }))} placeholder="Надёжный пароль" autoComplete="new-password" />{newUser.password.length < 12 && <small className="password-length-hint">Минимум 12 символов</small>}</label>
+              <label>Пароль <span className="optional-field">минимум 12 символов</span><input type="password" required minLength="12" value={newUser.password} onChange={e => setNewUser(v => ({ ...v, password: e.target.value }))} placeholder="Надёжный пароль" autoComplete="new-password" /></label>
               <button className="button primary" type="submit"><Plus size={16} /> Создать учётную запись</button>
             </form>
             <div className="admin-users-list">{users.map(user => <div className="admin-user-row" key={user.id || user.email}><span><strong>{user.name || user.email}</strong><small>{user.email}</small></span><Status tone={user.role === 'admin' ? 'purple' : 'green'}>{user.role === 'admin' ? 'Администратор' : 'Сотрудник'}</Status></div>)}</div>
