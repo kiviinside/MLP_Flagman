@@ -974,7 +974,31 @@ export default function App() {
               <option>90 дней</option>
             </select>
           </div>
-          <button className="button secondary" onClick={() => notify('Отчёт в файле пока не поддерживается API')}>
+          <button className="button secondary" onClick={async () => {
+            try {
+              const days = range === '7 дней' ? 7 : range === '90 дней' ? 90 : 30;
+              const to = new Date();
+              const from = new Date(to.getTime() - days * 24 * 60 * 60 * 1000);
+              const asLocalDateTime = value => {
+                const pad = part => String(part).padStart(2, '0');
+                return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}T${pad(value.getHours())}:${pad(value.getMinutes())}:${pad(value.getSeconds())}`;
+              };
+              const query = `from=${encodeURIComponent(asLocalDateTime(from))}&to=${encodeURIComponent(asLocalDateTime(to))}`;
+              const report = await apiRequest(`/api/analytics/export?${query}`);
+              const blob = new Blob([report], { type: 'text/csv;charset=UTF-8' });
+              const url = URL.createObjectURL(blob);
+              const link = document.createElement('a');
+              link.href = url;
+              link.download = `warehouse-analytics-${to.toISOString().slice(0, 10)}.csv`;
+              document.body.appendChild(link);
+              link.click();
+              link.remove();
+              URL.revokeObjectURL(url);
+              notify('Отчёт успешно скачан');
+            } catch (error) {
+              notify(error?.message || 'Не удалось скачать отчёт');
+            }
+          }}>
             <Download size={16} /> Скачать отчёт
           </button>
         </div>
