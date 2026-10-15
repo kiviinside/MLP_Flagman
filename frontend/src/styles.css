@@ -4199,3 +4199,42 @@ html[data-theme="system"] .admin-users-panel .admin-user-row small { color: #6f6
 .profile-detail .top-avatar { flex: 0 0 54px; width: 54px; height: 54px; display: grid; place-items: center; border-radius: 50%; background: var(--purple-soft); color: var(--purple); font-weight: 800; }
 .profile-detail p { color: var(--muted); margin: 5px 0 10px; overflow-wrap: anywhere; }
 @media (max-width: 620px) { .writeoff-card { flex-direction: column; } .writeoff-actions { justify-content: flex-start; } .top-profile-button .user-label { display: none; } }
+
+
+/* Исправление выравнивания формы пользователей и адаптивных таблиц. */
+.admin-user-form { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
+.admin-user-form label { align-content: start; }
+.admin-user-form .optional-field { display: block; margin-top: 2px; line-height: 1.35; }
+.admin-user-form > .button { grid-column: 1 / -1; justify-self: center; align-self: center; }
+/* Поля на светлом фоне всегда используют контрастный тёмный текст, включая тёмную тему. */
+.admin-users-panel .admin-user-form input,
+.admin-users-panel .admin-user-form select {
+  background: #fff !important;
+  color: #302747 !important;
+  -webkit-text-fill-color: #302747;
+}
+.admin-users-panel .admin-user-form input::placeholder { color: #817891 !important; opacity: 1; }
+.admin-users-panel .admin-user-form input:-webkit-autofill {
+  -webkit-text-fill-color: #302747 !important;
+  box-shadow: 0 0 0 1000px #fff inset;
+}
+@media (max-width: 850px) {
+  .table-wrap { width: 100%; max-width: 100%; overflow-x: hidden !important; }
+  .table-wrap table { width: 100% !important; min-width: 0 !important; table-layout: auto !important; border-collapse: collapse; }
+  .table-wrap th, .table-wrap td {
+    box-sizing: border-box;
+    white-space: normal !important;
+    overflow-wrap: anywhere;
+    word-break: normal;
+    vertical-align: top;
+    padding: 8px 6px !important;
+    font-size: 11px !important;
+  }
+  .table-wrap th { font-size: 10px !important; }
+}
+@media (max-width: 620px) {
+  .admin-user-form { grid-template-columns: minmax(0, 1fr); }
+  .admin-user-form > .button { grid-column: 1; justify-self: center; }
+  .table-wrap th, .table-wrap td { padding: 7px 4px !important; font-size: 10px !important; }
+  .table-wrap th { font-size: 9px !important; }
+}

@@ -7,7 +7,6 @@ import {
   CircleHelp, LogOut, Check, AlertTriangle, CalendarDays, Filter, Download, 
   CircleCheck, Trash2, RefreshCw 
 } from 'lucide-react';
-import { dishes } from './data/mockData.js';
 import { apiRequest, setApiCredentials, clearApiCredentials } from './api/http.js';
 
 const nav = [
@@ -40,25 +39,6 @@ const productImageFor = (name = '') => {
   return '/images/placeholder.svg';
 };
 const normalizeName = value => String(value || '').trim().toLocaleLowerCase('ru-RU');
-const orderStatusLabel = status => ({
-  CREATED: 'Принят', NEW: 'Новый', PENDING: 'Ожидает подтверждения', CONFIRMED: 'Подтверждён',
-  IN_PROGRESS: 'Готовится', PREPARING: 'Готовится', READY: 'Готов к выдаче', COMPLETED: 'Выполнен',
-  CANCELLED: 'Отменён', CANCELED: 'Отменён', CANCELLED_OUT_OF_STOCK: 'Отклонён: нет остатков',
-  REJECTED: 'Отклонён', FAILED: 'Ошибка'
-})[String(status || '').toUpperCase()] || status || 'Не указан';
-const supplyStatusLabel = status => ({
-  CREATED: 'Оформлена', NEW: 'Оформлена', PENDING: 'Ожидает подтверждения', CONFIRMED: 'Подтверждена',
-  APPROVED: 'Подтверждена', PROCESSING: 'Комплектуется', PACKING: 'Комплектуется', SHIPPED: 'Отправлена',
-  IN_TRANSIT: 'В пути', DELIVERED: 'Доставлена', RECEIVED: 'Принята на склад', COMPLETED: 'Завершена',
-  CANCELLED: 'Отменена', CANCELED: 'Отменена', REJECTED: 'Отклонена'
-})[String(status || '').toUpperCase()] || status || 'Не указан';
-const statusTone = status => {
-  const value = String(status || '').toLocaleLowerCase('ru-RU');
-  if (/выполнен|заверш|доставлен|принята на склад|в норме|готов к выдаче/.test(value)) return 'green';
-  if (/отмен|отклон|ошибка|нет остатков|просроч/.test(value)) return 'red';
-  if (/пути|отправ|готовится|комплект|обработк|подтверждён/.test(value)) return 'blue';
-  return 'amber';
-};
 const productCategoryFor = (name = '') => {
   const n = String(name).toLowerCase();
   if (/молок|сыр|сметан|сливк|йогурт|творог|моцарел/.test(n)) return 'Молочные продукты';
@@ -69,7 +49,7 @@ const productCategoryFor = (name = '') => {
 
 function Status({ children, tone }) { 
   return (
-    <span className={`status ${tone || statusTone(children)}`}>
+    <span className={`status ${tone || (children === 'Доставлен' || children === 'Доставлена' || children === 'В норме' ? 'green' : children === 'Отменён' || children === 'Просрочен' ? 'red' : 'amber')}`}>
       {children}
     </span>
   ); 
@@ -152,7 +132,7 @@ export default function App() {
   const [search, setSearch] = useState('');
   const [products, setProducts] = useState([]);
   const [stockBatches, setStockBatches] = useState([]);
-  const [menuDishes, setMenuDishes] = useState(dishes);
+  const [menuDishes, setMenuDishes] = useState([]);
   const [dishForm, setDishForm] = useState({ name: '', description: '', ingredients: '', category: 'Основное', price: '', kcal: '', protein: '', fat: '', carbs: '' });
   const [dishRecipeItems, setDishRecipeItems] = useState([{ productId: '', requiredQuantity: '0.1' }]);
   const [dishMetadata, setDishMetadata] = useState(() => readStorage('mlp-dish-display-metadata', {}));
@@ -309,20 +289,16 @@ export default function App() {
       };
     }));
 
+    // В каталоге показываем только блюда, реально полученные из серверного API.
+    // Демонстрационные блюда больше не подмешиваются в меню и оформление заказов.
     const serverDishes = Array.isArray(serverDishResponse) ? serverDishResponse : [];
-    const mergedDishes = dishes.map(base => {
-      const match = serverDishes.find(item => normalizeName(item.name) === normalizeName(base.name));
-      return match ? mapServerDish(match, base) : { ...base, id: `static-${base.id}`, backendId: null, isAvailable: false };
-    });
-    serverDishes.filter(item => !dishes.some(base => normalizeName(base.name) === normalizeName(item.name)))
-      .forEach(item => mergedDishes.push(mapServerDish(item)));
-    setMenuDishes(mergedDishes);
+    setMenuDishes(serverDishes.map(item => mapServerDish(item)));
 
     const dishById = new Map(serverDishes.map(dish => [Number(dish.id), dish]));
     setOrders(orderResponse.map(order => ({
       id: order.id, orderNumber: order.orderNumber, date: formatDate(order.createdAt),
       dishes: (order.items || []).reduce((sum, item) => sum + Number(item.quantity || 0), 0),
-      status: orderStatusLabel(order.status),
+      status: ({ CREATED: 'В обработке', COMPLETED: 'Завершён', CANCELLED_OUT_OF_STOCK: 'Отказ: нет остатков' })[order.status] || order.status,
       amount: (order.items || []).reduce((sum, item) => sum + Number(dishById.get(Number(item.dishId))?.price || 0) * Number(item.quantity || 0), 0),
       rawStatus: order.status, items: order.items || []
     })));
@@ -341,18 +317,18 @@ export default function App() {
       }));
       return {
         id, supplier: readStorage('mlp-supply-display-metadata', {})[id] || supplyMetadata[id] || '—', date: formatDate(supply.createdAt),
-        amount: Number(supply.totalQuantity || 0), status: supplyStatusLabel(supply.status), rawStatus: supply.status,
+        amount: Number(supply.totalQuantity || 0), status: supply.status === 'RECEIVED' ? 'Доставлена' : (supply.status || 'Принята'),
         items, itemCount: supply.itemCount
       };
     }));
     setStopItems(stopResponse.map(item => ({
       id: item.dishId, name: item.dishName,
-      image: (serverDishes.find(d => Number(d.id) === Number(item.dishId)) && mapServerDish(serverDishes.find(d => Number(d.id) === Number(item.dishId))).image) || dishes.find(d => normalizeName(d.name) === normalizeName(item.dishName))?.image || '/images/placeholder.svg',
+      image: (serverDishes.find(d => Number(d.id) === Number(item.dishId)) && mapServerDish(serverDishes.find(d => Number(d.id) === Number(item.dishId))).image) || '',
       reason: item.missingIngredients?.length ? item.missingIngredients.join(', ') : 'Недостаточно ингредиентов'
     })));
     setHotDishes(offerResponse.map(offer => {
       const serverDish = serverDishes.find(d => Number(d.id) === Number(offer.dishId));
-      const base = serverDish ? mapServerDish(serverDish) : dishes.find(d => normalizeName(d.name) === normalizeName(offer.dishName));
+      const base = serverDish ? mapServerDish(serverDish) : null;
       return {
         ...(base || {}), id: offer.dishId, backendId: offer.dishId, name: offer.dishName,
         price: Number(offer.price || base?.price || 0), reasons: offer.reasons || [],
@@ -1004,9 +980,9 @@ export default function App() {
         </div>
         <div className="stats-grid">
           <StatCard icon={Trash2} label="Списано продуктов" value={writeOffs.reduce((sum, item) => sum + Number(item.totalQuantity || 0), 0).toLocaleString('ru-RU')} hint={`${writeOffs.length} позиций в отчёте`} tone="orange" />
-          <StatCard icon={ChartNoAxesCombined} label="Доля списаний" value={(() => { const total = products.reduce((sum, p) => sum + Math.max(0, Number(p.amount || 0)), 0); const written = writeOffs.reduce((sum, item) => sum + Math.max(0, Number(item.totalQuantity || 0)), 0); return total + written > 0 ? `${Math.round(written / (total + written) * 100)}%` : "—"; })()} hint="списания относительно доступного остатка и списанного объёма" tone="green" />
+          <StatCard icon={ChartNoAxesCombined} label="Доля списаний" value="—" hint="доля списаний не входит в текущий API" tone="green" />
           <StatCard icon={AlertTriangle} label="Дефицитных ингредиентов" value={products.filter(p => p.amount <= 0).length} hint="по текущим остаткам" tone="red" />
-          <StatCard icon={Ban} label="Прогноз стоп-листа" value={stopItems.length} hint="блюд сейчас в стоп-листе" tone="purple" />
+          <StatCard icon={Ban} label="Прогноз стоп-листа" value="—" hint="нужны рецептуры и история" tone="purple" />
         </div>
         <div className="analytics-grid">
           <section className="panel">
@@ -1442,7 +1418,7 @@ export default function App() {
                   <span>Выбрано блюд: <strong>{selectedDishCount}</strong></span>
                   <span>Итого: <strong>{money(selectedDishTotal)}</strong></span>
                 </div>
-                <p className="form-hint">Сервер проверит доступность ингредиентов и спишет партии по своей складской логике.</p>
+                <p className="form-hint">В списке отображаются только блюда, добавленные в серверный каталог.</p>
                 <button className="button primary full" onClick={createOrder}>
                   <Check size={16} /> Создать заказ
                 </button>
