@@ -1088,7 +1088,7 @@ export default function App() {
             <div className="admin-users-heading"><div><strong>Управление пользователями</strong><p>Создавать аккаунты сотрудников может только администратор.</p></div><Status tone="purple">Администратор</Status></div>
             <form className="admin-user-form" onSubmit={registerUser}>
               <label>Логин сотрудника<input required minLength="3" value={newUser.email} onChange={e => setNewUser(v => ({ ...v, email: e.target.value }))} placeholder="employee01" autoComplete="off" /></label>
-              <label>Пароль <span className="optional-field">минимум 12 символов</span><input type="password" required minLength="12" value={newUser.password} onChange={e => setNewUser(v => ({ ...v, password: e.target.value }))} placeholder="Надёжный пароль" autoComplete="new-password" /></label>
+              <label>Пароль<input type="password" required minLength="12" value={newUser.password} onChange={e => setNewUser(v => ({ ...v, password: e.target.value }))} placeholder="Надёжный пароль" autoComplete="new-password" />{newUser.password.length < 12 && <small className="password-length-hint">Минимум 12 символов</small>}</label>
               <button className="button primary" type="submit"><Plus size={16} /> Создать учётную запись</button>
             </form>
             <div className="admin-users-list">{users.map(user => <div className="admin-user-row" key={user.id || user.email}><span><strong>{user.name || user.email}</strong><small>{user.email}</small></span><Status tone={user.role === 'admin' ? 'purple' : 'green'}>{user.role === 'admin' ? 'Администратор' : 'Сотрудник'}</Status></div>)}</div>

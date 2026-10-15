@@ -4318,3 +4318,22 @@ html[data-theme="system"] .admin-users-panel .admin-user-row small { color: #6f6
 .admin-users-panel .status.amber { color: #94600e !important; }
 .admin-users-panel .status.red { color: #bd3654 !important; }
 .admin-users-panel .status.blue { color: #3269c2 !important; }
+
+
+/* Password length hint: shown below the password field only while it is under 12 characters. */
+.admin-users-panel .admin-user-form .password-length-hint {
+  display: block;
+  margin: 0;
+  padding: 0;
+  color: #e0a84b;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.35;
+}
+.admin-users-panel .admin-user-form label {
+  align-content: start;
+  align-self: start;
+}
+.admin-users-panel .admin-user-form > .button {
+  margin-top: 2px;
+}
