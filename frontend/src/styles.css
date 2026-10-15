@@ -4098,3 +4098,68 @@ html[data-theme="light"] .optional-field { color: #706783; font-size: 11px; font
     .catalog-dish-grid { grid-template-columns: minmax(0, 1fr); }
     .catalog-nutrition { gap: 5px; }
 }
+
+
+/* Точечные исправления: читаемость системной темы, кнопка управления пользователями и мобильные таблицы. */
+@media (prefers-color-scheme: dark) {
+  html[data-theme="system"] .admin-users-panel,
+  html[data-theme="system"] .admin-users-panel strong,
+  html[data-theme="system"] .admin-users-panel label,
+  html[data-theme="system"] .admin-users-panel .admin-user-row,
+  html[data-theme="system"] .admin-users-panel .admin-user-row strong {
+    color: var(--ink);
+  }
+  html[data-theme="system"] .admin-users-heading p,
+  html[data-theme="system"] .admin-user-row small,
+  html[data-theme="system"] .optional-field {
+    color: var(--muted);
+  }
+  html[data-theme="system"] .admin-user-form input,
+  html[data-theme="system"] .admin-user-form select {
+    color: var(--ink);
+  }
+}
+
+.admin-user-form > .button {
+  justify-self: center;
+  align-self: center;
+}
+
+@media (max-width: 850px) {
+  .table-wrap {
+    overflow-x: hidden;
+    max-width: 100%;
+  }
+
+  .table-wrap table {
+    width: 100%;
+    min-width: 0;
+    table-layout: fixed;
+    white-space: normal;
+  }
+
+  .table-wrap th,
+  .table-wrap td {
+    padding: 8px 5px;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: normal;
+    font-size: 11px;
+  }
+
+  .table-wrap th {
+    font-size: 9px;
+  }
+}
+
+@media (max-width: 560px) {
+  .table-wrap th,
+  .table-wrap td {
+    padding: 7px 3px;
+    font-size: 10px;
+  }
+
+  .table-wrap th {
+    font-size: 8px;
+  }
+}

@@ -113,7 +113,7 @@ export default function App() {
   const [signedIn, setSignedIn] = useState(false);
     const [authError, setAuthError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [login, setLogin] = useState({ email: 'admin', password: '' });
+  const [login, setLogin] = useState({ email: '', password: '' });
   const [currentUser, setCurrentUser] = useState(null);
   const userName = currentUser?.name?.trim() || currentUser?.login || currentUser?.email?.split('@')[0] || 'Пользователь';
   const userFirstName = userName.split(' ')[0];
@@ -349,8 +349,7 @@ export default function App() {
     e.preventDefault();
     setAuthError('');
     setLoading(true);
-    const rawLogin = login.email.trim();
-    const username = rawLogin.toLowerCase() === 'admin@vkusbalans.ru' ? 'admin' : rawLogin;
+    const username = login.email.trim();
     if (!username || !login.password) {
       setAuthError('Введите логин и пароль от серверной учётной записи.');
       setLoading(false);
@@ -372,6 +371,30 @@ export default function App() {
       setApiConnected(false);
     } finally { setLoading(false); }
   };
+
+  // Восстанавливаем проверенную сессию после обновления страницы. Пароль не хранится в localStorage.
+  useEffect(() => {
+    let cancelled = false;
+    const restoreSession = async () => {
+      const stored = (() => { try { return JSON.parse(sessionStorage.getItem('mlp-api-credentials') || 'null'); } catch { return null; } })();
+      if (!stored?.username || !stored?.password) return;
+      try {
+        await apiRequest('/api/dashboard');
+        let role = 'employee';
+        try { await apiRequest('/api/admin/products'); role = 'admin'; }
+        catch (error) { if (error.status !== 403) throw error; }
+        if (cancelled) return;
+        const username = stored.username;
+        setCurrentUser({ login: username, name: username, email: username, role });
+        await loadData();
+        if (!cancelled) setSignedIn(true);
+      } catch {
+        clearApiCredentials();
+      }
+    };
+    restoreSession();
+    return () => { cancelled = true; };
+  }, []);
 
   const addProduct = async e => {
     e.preventDefault();
@@ -1149,7 +1172,6 @@ export default function App() {
               placeholder="Поиск по продуктам, блюдам, поставкам…" 
               aria-label="Поиск" 
             />
-            <kbd>⌘ K</kbd>
           </div>
           <div className="topbar-right">
             <span className="date-label">
