@@ -98,6 +98,27 @@ function EmptyState({ text }) {
 }
 
 export default function App() {
+  // На узком экране таблицы превращаются в карточки с подписями столбцов.
+  // Подписи берутся из настоящих заголовков, поэтому подходят разным таблицам.
+  useEffect(() => {
+    const labelTables = () => {
+      document.querySelectorAll('.table-wrap table').forEach(table => {
+        const labels = Array.from(table.querySelectorAll('thead th')).map(th => th.textContent.trim());
+        table.querySelectorAll('tbody tr').forEach(row => {
+          if (row.classList.contains('supply-items-row')) return;
+          Array.from(row.cells).forEach((cell, index) => {
+            if (cell.colSpan > 1) return;
+            const label = labels[index] || '';
+            if (label) cell.setAttribute('data-label', label);
+          });
+        });
+      });
+    };
+    labelTables();
+    const observer = new MutationObserver(labelTables);
+    observer.observe(document.body, { childList: true, subtree: true });
+    return () => observer.disconnect();
+  }, []);
   const [active, setActive] = useState('Главная');
   const [theme, setTheme] = useState(() => {
     try { return localStorage.getItem('vkus-balans-theme') || 'system'; } 
