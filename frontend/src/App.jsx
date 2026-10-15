@@ -158,7 +158,7 @@ export default function App() {
   });
   useEffect(() => { try { localStorage.setItem('vkus-balans-settings', JSON.stringify(settings)); } catch {} }, [settings]);
   useEffect(() => {
-    if (!signedIn) return;
+    if (!signedIn || active !== 'Аналитика') return;
     const days = range === '7 дней' ? 7 : range === '90 дней' ? 90 : 30;
     const asLocalDateTime = value => {
       const pad = part => String(part).padStart(2, '0');
@@ -168,8 +168,8 @@ export default function App() {
     const from = new Date(to.getTime() - days * 24 * 60 * 60 * 1000);
     apiRequest(`/api/analytics/write-offs?from=${encodeURIComponent(asLocalDateTime(from))}&to=${encodeURIComponent(asLocalDateTime(to))}`)
       .then(setWriteOffs)
-      .catch(() => {});
-  }, [range, signedIn]);
+      .catch(error => notify(`Не удалось загрузить аналитику списаний: ${error.message}`));
+  }, [range, signedIn, active]);
   const [form, setForm] = useState({ name: '', amount: '', unit: 'кг', expiry: '' });
   const [selectedDishes, setSelectedDishes] = useState({});
 

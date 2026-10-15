@@ -53,7 +53,7 @@ public class SecurityConfig {
                     .hasAnyRole("ADMIN", "STAFF")
                 .requestMatchers("/api/supplies/**").hasRole("ADMIN")
                 // Скачивание отчёта склада доступно сотрудникам и администраторам.
-                .requestMatchers(HttpMethod.GET, "/api/analytics/export").hasAnyRole("ADMIN", "STAFF")
+                .requestMatchers(HttpMethod.GET, "/api/analytics/export", "/api/analytics/write-offs").hasAnyRole("ADMIN", "STAFF")
                 .requestMatchers("/api/analytics/**").hasRole("ADMIN")
                 .requestMatchers("/api/**").hasAnyRole("ADMIN", "STAFF")
                 .anyRequest().denyAll())
