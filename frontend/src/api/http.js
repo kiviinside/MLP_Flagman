@@ -27,7 +27,7 @@ export async function apiRequest(path, options = {}) {
   pendingRequests += 1;
   notifyApiActivity();
   try {
-    const baseUrl = String(import.meta.env.VITE_API_URL || '').replace(/\\/$/, '');
+    const baseUrl = String(import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
     const headers = new Headers(options.headers || {});
     if (credentials) headers.set('Authorization', `Basic ${btoa(`${credentials.username}:${credentials.password}`)}`);
     if (options.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
