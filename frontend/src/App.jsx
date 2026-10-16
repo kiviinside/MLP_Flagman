@@ -99,8 +99,10 @@ function EmptyState({ text }) {
 
 export default function App() {
   const [active, setActive] = useState('Главная');
+  const [apiLoading, setApiLoading] = useState(false);
   const [stockTrend, setStockTrend] = useState([]);
   const [stockTrendPeriod, setStockTrendPeriod] = useState('24h');
+  const [stockTrendProductId, setStockTrendProductId] = useState('');
   const [stockTrendError, setStockTrendError] = useState('');
   const [theme, setTheme] = useState(() => {
     try { return localStorage.getItem('vkus-balans-theme') || 'system'; } 
@@ -111,6 +113,27 @@ export default function App() {
     document.documentElement.dataset.theme = theme;
     try { localStorage.setItem('vkus-balans-theme', theme); } catch {}
   }, [theme]);
+
+  useEffect(() => {
+    let showTimer;
+    const onApiActivity = (event) => {
+      const pending = Number(event.detail?.pending || 0);
+      if (pending > 0) {
+        if (!showTimer && !apiLoading) {
+          showTimer = window.setTimeout(() => setApiLoading(true), 180);
+        }
+      } else {
+        if (showTimer) window.clearTimeout(showTimer);
+        showTimer = undefined;
+        setApiLoading(false);
+      }
+    };
+    window.addEventListener('mlp-api-activity', onApiActivity);
+    return () => {
+      if (showTimer) window.clearTimeout(showTimer);
+      window.removeEventListener('mlp-api-activity', onApiActivity);
+    };
+  }, [apiLoading]);
   
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [readNotificationIds, setReadNotificationIds] = useState(() => readStorage('mlp-read-notifications', []));
@@ -125,7 +148,8 @@ export default function App() {
     let timer;
     const refresh = async () => {
       try {
-        const rows = await apiRequest('/api/warehouse/stock-trend');
+        if (!stockTrendProductId) { setStockTrend([]); setStockTrendError(''); return; }
+        const rows = await apiRequest(`/api/warehouse/stock-trend/product?productId=${encodeURIComponent(stockTrendProductId)}`);
         if (!alive) return;
         if (Array.isArray(rows)) {
           setStockTrend(rows);
@@ -151,7 +175,7 @@ export default function App() {
       alive = false;
       if (timer) clearInterval(timer);
     };
-  }, [signedIn]);
+  }, [signedIn, stockTrendProductId]);
 
     const [authError, setAuthError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -167,6 +191,10 @@ export default function App() {
   const [mobileNav, setMobileNav] = useState(false);
   const [search, setSearch] = useState('');
   const [products, setProducts] = useState([]);
+  useEffect(() => {
+    if (!stockTrendProductId && products.length) setStockTrendProductId(String(products[0].id));
+    else if (stockTrendProductId && products.length && !products.some(p => String(p.id) === String(stockTrendProductId))) setStockTrendProductId(String(products[0].id));
+  }, [products, stockTrendProductId]);
   const [stockBatches, setStockBatches] = useState([]);
   const [menuDishes, setMenuDishes] = useState([]);
   const [dishForm, setDishForm] = useState({ name: '', description: '', ingredients: '', category: 'Основное', price: '', kcal: '', protein: '', fat: '', carbs: '' });
@@ -768,11 +796,22 @@ export default function App() {
             </div>
           </section>
           <section className="panel chart-panel">
-            <SectionTitle title="Пульс склада" subtitle="Остаток, поступления и расход. Данные обновляются автоматически." />
+            <SectionTitle title="Пульс склада" subtitle="Динамика одного выбранного продукта. Все три линии показаны в единицах из карточки продукта." />
             {stockTrendError ? (
               <EmptyState text={`Не удалось загрузить график: ${stockTrendError}`} />
+            ) : products.length === 0 ? (
+              <EmptyState text="В каталоге пока нет продуктов для построения графика." />
             ) : stockTrend.length === 0 ? (
-              <EmptyState text="История склада пока собирается. Снимки создаются автоматически примерно раз в 5 минут." />
+              <>
+                <div style={{ marginBottom: 12 }}>
+                  <label style={{ display: 'block', maxWidth: 420, fontSize: 13 }}>Продукт для графика
+                    <select value={stockTrendProductId} onChange={e => setStockTrendProductId(e.target.value)} style={{ display: 'block', width: '100%', marginTop: 6 }}>
+                      {products.map(p => <option key={p.id} value={String(p.id)}>{p.name} ({p.unit || 'ед.'})</option>)}
+                    </select>
+                  </label>
+                </div>
+                <EmptyState text="История выбранного продукта пока собирается. Первая точка создаётся автоматически; новые снимки добавляются примерно раз в 5 минут." />
+              </>
             ) : (() => {
               const periodMs = stockTrendPeriod === '24h' ? 24 * 60 * 60 * 1000
                 : stockTrendPeriod === '7d' ? 7 * 24 * 60 * 60 * 1000
@@ -791,6 +830,7 @@ export default function App() {
                 { key: 'received24h', label: 'Поступления за 24 ч', color: '#3b82f6' },
                 { key: 'used24h', label: 'Расход за 24 ч', color: '#f59e0b' }
               ];
+              const drawKeys = [keys[1], keys[2], keys[0]]; // зелёная линия последней — всегда поверх остальных
               const max = Math.max(1, ...rows.flatMap(x => keys.map(k => Number(x[k.key] || 0))));
               const xAt = i => rows.length === 1 ? (W + padL - padR) / 2
                 : padL + i * (W - padL - padR) / (rows.length - 1);
@@ -806,6 +846,14 @@ export default function App() {
               };
               return (
                 <div className="stock-trend-chart">
+                  <div style={{ marginBottom: 12 }}>
+                    <label style={{ display: 'block', maxWidth: 420, fontSize: 13 }}>Продукт для графика
+                      <select value={stockTrendProductId} onChange={e => setStockTrendProductId(e.target.value)} style={{ display: 'block', width: '100%', marginTop: 6 }}>
+                        {products.map(p => <option key={p.id} value={String(p.id)}>{p.name} ({p.unit || 'ед.'})</option>)}
+                      </select>
+                    </label>
+                    <small style={{ display: 'block', marginTop: 6, opacity: .75 }}>Единица измерения: <strong>{products.find(p => String(p.id) === String(stockTrendProductId))?.unit || 'ед.'}</strong>. Продукты с разными единицами не суммируются.</small>
+                  </div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
                     {[['24h', '24 часа'], ['7d', '7 дней'], ['30d', '30 дней']].map(([value, label]) => (
                       <button
@@ -829,7 +877,7 @@ export default function App() {
                     ))}
                   </div>
                   <div style={{ overflowX: 'auto' }}>
-                    <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Динамика остатка, поступлений и расхода" style={{ width: '100%', minWidth: 320, height: 'auto', display: 'block' }}>
+                    <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`Динамика остатка, поступлений и расхода в ${products.find(p => String(p.id) === String(stockTrendProductId))?.unit || 'единицах'}`} style={{ width: '100%', minWidth: 320, height: 'auto', display: 'block' }}>
                       {[0, .25, .5, .75, 1].map(r => {
                         const y = H - padB - r * (H - padT - padB);
                         return <g key={r}>
@@ -837,11 +885,12 @@ export default function App() {
                           <text x={padL - 8} y={y + 4} fontSize="10" textAnchor="end" fill="currentColor" opacity=".65">{fmt(max * r)}</text>
                         </g>;
                       })}
-                      {keys.map(k => (
+                      {drawKeys.map(k => (
                         <g key={k.key}>
-                          <polyline points={points(k.key)} fill="none" stroke={k.color} strokeWidth={k.key === 'totalQuantity' ? 3 : 2.5} strokeLinejoin="round" strokeLinecap="round" />
+                          <polyline points={points(k.key)} fill="none" stroke={k.color} strokeWidth={k.key === 'totalQuantity' ? 4.5 : 2.5} strokeLinejoin="round" strokeLinecap="round" opacity={k.key === 'totalQuantity' ? 1 : 0.9} />
+                          {k.key === 'totalQuantity' && rows.length === 1 && <line x1={xAt(0) - 8} y1={yAt(rows[0].totalQuantity)} x2={xAt(0) + 8} y2={yAt(rows[0].totalQuantity)} stroke="#16a34a" strokeWidth="4.5" strokeLinecap="round" />}
                           {rows.map((x, i) => (
-                            <circle key={`${k.key}-${x.timestamp || i}`} cx={xAt(i)} cy={yAt(x[k.key])} r={rows.length < 30 ? 3 : 1.7} fill={k.color}>
+                            <circle key={`${k.key}-${x.timestamp || i}`} cx={xAt(i)} cy={yAt(x[k.key])} r={k.key === 'totalQuantity' ? (rows.length < 30 ? 4.5 : 3) : (rows.length < 30 ? 3 : 1.7)} fill={k.color} stroke={k.key === 'totalQuantity' ? '#ffffff' : 'none'} strokeWidth={k.key === 'totalQuantity' ? 1.2 : 0}>
                               <title>{`${k.label}: ${fmt(x[k.key])} · ${new Date(x.timestamp).toLocaleString('ru-RU')}`}</title>
                             </circle>
                           ))}
@@ -855,7 +904,7 @@ export default function App() {
                     {keys.map(k => <span key={k.key} style={{ color: k.color }}>● {k.label}</span>)}
                   </div>
                   <small style={{ display: 'block', marginTop: 10, opacity: .7 }}>
-                    Поступления и расход — фактические операции за скользящие 24 часа на момент каждого снимка. Точек в истории: {stockTrend.length}.
+                    Зелёная линия — текущий остаток выбранного продукта; синяя — поступления, оранжевая — расход за скользящие 24 часа. Все значения — в {products.find(p => String(p.id) === String(stockTrendProductId))?.unit || 'единицах'} этого продукта. История: {stockTrend.length} точек.
                   </small>
                 </div>
               );
@@ -1282,6 +1331,31 @@ export default function App() {
 
   return (
     <div className="app-shell">
+        <style>{`
+          @keyframes mlp-loading-spin { to { transform: rotate(360deg); } }
+          .mlp-request-loader {
+            position: fixed; top: 16px; left: 50%; transform: translateX(-50%);
+            z-index: 9999; display: flex; align-items: center; gap: 10px;
+            padding: 10px 15px; border-radius: 999px;
+            background: var(--panel, #fff); color: var(--text, #24302a);
+            border: 1px solid var(--border, #dce5dd);
+            box-shadow: 0 8px 28px rgba(0,0,0,.14); font-size: 13px; font-weight: 600;
+            pointer-events: none;
+          }
+          .mlp-request-loader-spinner {
+            width: 16px; height: 16px; border-radius: 50%;
+            border: 2px solid rgba(46, 125, 50, .2);
+            border-top-color: #2e9d50; animation: mlp-loading-spin .7s linear infinite;
+            flex: 0 0 auto;
+          }
+          @media (prefers-reduced-motion: reduce) {
+            .mlp-request-loader-spinner { animation-duration: 1.8s; }
+          }
+        `}</style>
+        {apiLoading && <div className="mlp-request-loader" role="status" aria-live="polite">
+          <span className="mlp-request-loader-spinner" aria-hidden="true" />
+          <span>Загрузка…</span>
+        </div>}
         <aside className={`sidebar ${mobileNav ? 'sidebar-open' : ''}`}>
         <div className="brand">
           <div className="brand-mark">
