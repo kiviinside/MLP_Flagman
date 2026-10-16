@@ -99,6 +99,7 @@ function EmptyState({ text }) {
 
 export default function App() {
   const [active, setActive] = useState('Главная');
+  const [stockTrend, setStockTrend] = useState([]);
   const [theme, setTheme] = useState(() => {
     try { return localStorage.getItem('vkus-balans-theme') || 'system'; } 
     catch { return 'system'; }
@@ -117,6 +118,7 @@ export default function App() {
   useEffect(() => { try { localStorage.setItem('mlp-writeoff-requests', JSON.stringify(writeOffRequests)); } catch {} }, [writeOffRequests]);
   useEffect(() => { try { localStorage.setItem('mlp-read-notifications', JSON.stringify(readNotificationIds)); } catch {} }, [readNotificationIds]);
   const [signedIn, setSignedIn] = useState(false);
+  useEffect(() => { let alive = true; let timer; const refresh = async () => { try { const rows = await apiRequest('/api/warehouse/stock-trend'); if (alive && Array.isArray(rows)) setStockTrend(rows); } catch (e) { console.warn('Не удалось обновить динамику остатков', e); } }; refresh(); timer = setInterval(refresh, 60000); return () => { alive = false; clearInterval(timer); }; }, [signedIn]);
     const [authError, setAuthError] = useState('');
   const [loading, setLoading] = useState(false);
   const [login, setLogin] = useState({ email: '', password: '' });
@@ -706,8 +708,12 @@ export default function App() {
             </div>
           </section>
           <section className="panel chart-panel">
-            <SectionTitle title="Динамика остатков" subtitle="График появится после накопления фактической истории движения продуктов." />
-            <EmptyState text="Пока нет данных для построения графика. Зарегистрируйте поставки и движения продуктов." />
+            <SectionTitle title="Динамика остатков" subtitle="История склада, списания и партии с истекающим сроком. Обновление каждую минуту." />
+            {stockTrend.length < 2 ? <EmptyState text="История накапливается автоматически. Первые точки появятся после нескольких измерений; новые данные сохраняются в базе." /> : (() => {
+              const W=720,H=230,pad=32, vals=stockTrend.flatMap(x=>[Number(x.totalQuantity||0),Number(x.expiringQuantity||0)]), max=Math.max(1,...vals), min=0;
+              const points=(key)=>stockTrend.map((x,i)=>`${pad+i*(W-2*pad)/(stockTrend.length-1)},${H-pad-(Number(x[key]||0)-min)/(max-min)*(H-2*pad)}`).join(' ');
+              return <div className="stock-trend-chart"><div className="chart-legend"><span>● Общий доступный остаток</span><span>● Скоро истекает (48 ч)</span></div><svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label="График динамики остатков" style={{width:'100%',height:'auto',display:'block'}}><line x1={pad} y1={H-pad} x2={W-pad} y2={H-pad} stroke="currentColor" opacity=".25"/><line x1={pad} y1={pad} x2={pad} y2={H-pad} stroke="currentColor" opacity=".25"/><polyline points={points('totalQuantity')} fill="none" stroke="#16a34a" strokeWidth="3" strokeLinejoin="round"/><polyline points={points('expiringQuantity')} fill="none" stroke="#f59e0b" strokeWidth="2.5" strokeLinejoin="round"/>{stockTrend.map((x,i)=><circle key={x.timestamp||i} cx={pad+i*(W-2*pad)/(stockTrend.length-1)} cy={H-pad-Number(x.totalQuantity||0)/max*(H-2*pad)} r="2.5" fill="#16a34a"/> )}</svg><small>Точек: {stockTrend.length}. Данные сохраняются в PostgreSQL; частота снимков — около 5 минут.</small></div>;
+            })()}
           </section>
           <section className="panel">
             <SectionTitle title="Последние заказы" subtitle="Обновление списка вручную" action="Все заказы" onAction={() => changePage('Заказы')} />
