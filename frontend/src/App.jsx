@@ -99,7 +99,6 @@ function EmptyState({ text }) {
 
 export default function App() {
   const [active, setActive] = useState('Главная');
-  const [stockTrend, setStockTrend] = useState([]);
   const [theme, setTheme] = useState(() => {
     try { return localStorage.getItem('vkus-balans-theme') || 'system'; } 
     catch { return 'system'; }
@@ -118,7 +117,6 @@ export default function App() {
   useEffect(() => { try { localStorage.setItem('mlp-writeoff-requests', JSON.stringify(writeOffRequests)); } catch {} }, [writeOffRequests]);
   useEffect(() => { try { localStorage.setItem('mlp-read-notifications', JSON.stringify(readNotificationIds)); } catch {} }, [readNotificationIds]);
   const [signedIn, setSignedIn] = useState(false);
-  useEffect(() => { let alive = true; let timer; const refresh = async () => { try { const rows = await apiRequest('/api/warehouse/stock-trend'); if (alive && Array.isArray(rows)) setStockTrend(rows); } catch (e) { console.warn('Не удалось обновить динамику остатков', e); } }; refresh(); timer = setInterval(refresh, 60000); return () => { alive = false; clearInterval(timer); }; }, [signedIn]);
     const [authError, setAuthError] = useState('');
   const [loading, setLoading] = useState(false);
   const [login, setLogin] = useState({ email: '', password: '' });
@@ -160,7 +158,7 @@ export default function App() {
   });
   useEffect(() => { try { localStorage.setItem('vkus-balans-settings', JSON.stringify(settings)); } catch {} }, [settings]);
   useEffect(() => {
-    if (!signedIn || active !== 'Аналитика') return;
+    if (!signedIn) return;
     const days = range === '7 дней' ? 7 : range === '90 дней' ? 90 : 30;
     const asLocalDateTime = value => {
       const pad = part => String(part).padStart(2, '0');
@@ -170,8 +168,8 @@ export default function App() {
     const from = new Date(to.getTime() - days * 24 * 60 * 60 * 1000);
     apiRequest(`/api/analytics/write-offs?from=${encodeURIComponent(asLocalDateTime(from))}&to=${encodeURIComponent(asLocalDateTime(to))}`)
       .then(setWriteOffs)
-      .catch(error => notify(`Не удалось загрузить аналитику списаний: ${error.message}`));
-  }, [range, signedIn, active]);
+      .catch(() => {});
+  }, [range, signedIn]);
   const [form, setForm] = useState({ name: '', amount: '', unit: 'кг', expiry: '' });
   const [selectedDishes, setSelectedDishes] = useState({});
 
@@ -300,7 +298,7 @@ export default function App() {
     setOrders(orderResponse.map(order => ({
       id: order.id, orderNumber: order.orderNumber, date: formatDate(order.createdAt),
       dishes: (order.items || []).reduce((sum, item) => sum + Number(item.quantity || 0), 0),
-      status: ({ CREATED: 'В обработке', COMPLETED: 'Завершён', CANCELLED_OUT_OF_STOCK: 'Отказ: нет остатков' })[order.status] || order.status,
+      status: ({ CREATED: 'В обработке', READY: 'Готов', RECEIVED_BY_VISITOR: 'Получен посетителем', PAID: 'Оплачен', COMPLETED: 'Завершён', CANCELLED_OUT_OF_STOCK: 'Отказ: нет остатков' })[order.status] || order.status,
       amount: (order.items || []).reduce((sum, item) => sum + Number(dishById.get(Number(item.dishId))?.price || 0) * Number(item.quantity || 0), 0),
       rawStatus: order.status, items: order.items || []
     })));
@@ -425,6 +423,20 @@ export default function App() {
       await apiRequest(`/api/admin/products/${product.id}`, { method: 'DELETE' });
       await loadData(); notify('Продукт удалён');
     } catch (error) { notify(error.message || 'Не удалось удалить продукт'); }
+  };
+
+  const updateOrderStatus = async (orderId, nextStatus) => {
+    try {
+      await apiRequest(`/api/orders/${orderId}/status`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status: nextStatus })
+      });
+      await loadData();
+      notify('Статус заказа обновлён');
+    } catch (error) {
+      notify(error.message || 'Не удалось изменить статус заказа');
+      await loadData().catch(() => {});
+    }
   };
 
   const createOrder = async () => {
@@ -591,7 +603,21 @@ export default function App() {
               <td className="purple-text">#{o.id}</td>
               <td>{o.date}</td>
               <td>{o.dishes}</td>
-              <td><Status>{o.status}</Status></td>
+              <td>
+                {o.rawStatus === 'CANCELLED_OUT_OF_STOCK' ? <Status>{o.status}</Status> : (
+                  <select
+                    aria-label={`Статус заказа ${o.orderNumber || o.id}`}
+                    value={['CREATED', 'READY', 'RECEIVED_BY_VISITOR', 'PAID'].includes(o.rawStatus) ? o.rawStatus : 'CREATED'}
+                    onChange={event => updateOrderStatus(o.id, event.target.value)}
+                    style={{ maxWidth: '100%', minWidth: '155px', padding: '7px 9px', borderRadius: '8px', border: '1px solid var(--border, #ddd)', background: 'var(--surface, #fff)', color: 'inherit' }}
+                  >
+                    <option value="CREATED">В обработке</option>
+                    <option value="READY">Готов</option>
+                    <option value="RECEIVED_BY_VISITOR">Получен посетителем</option>
+                    <option value="PAID">Оплачен</option>
+                  </select>
+                )}
+              </td>
               <td className="strong-cell">{money(o.amount)}</td>
             </tr>
           ))}
@@ -651,7 +677,7 @@ export default function App() {
   const unreadNotificationCount = notificationItems.filter(item => !readNotificationIds.includes(item.id)).length;
   const openNotifications = () => { setNotificationsOpen(v => { if (!v) setReadNotificationIds(ids => [...new Set([...ids, ...notificationItems.map(item => item.id)])]); return !v; }); };
   const submitWriteOff = e => { e.preventDefault(); const product = products.find(p => String(p.id) === String(writeOffForm.productId)); if (!product || Number(writeOffForm.quantity) <= 0) { notify('Выберите продукт и укажите количество'); return; } if (Number(writeOffForm.quantity) > Number(product.amount)) { notify('Количество превышает доступный остаток'); return; } const request = { id: `wo-${Date.now()}`, productId: product.id, product: product.name, unit: product.unit, quantity: Number(writeOffForm.quantity), reason: writeOffForm.reason, comment: writeOffForm.comment.trim(), requestedBy: userName, createdAt: new Date().toISOString(), status: 'Ожидает подтверждения' }; setWriteOffRequests(rows => [request, ...rows]); setWriteOffForm({ productId: '', quantity: '', reason: 'Порча и брак', comment: '' }); setModal(''); notify('Заявка на списание отправлена администратору'); };
-  const decideWriteOff = async (id, approved) => { const request = writeOffRequests.find(row => row.id === id); if (!request || request.status !== 'Ожидает подтверждения') return; try { if (approved) { const reasonMap = { 'Порча и брак': 'SPOILAGE', 'Ошибки на кухне или в зале': 'KITCHEN_ERROR', 'Питание персонала': 'STAFF_MEAL' }; await apiRequest('/api/warehouse/write-offs', { method: 'POST', body: JSON.stringify({ productId: Number(request.productId), quantity: Number(request.quantity), reason: reasonMap[request.reason] || 'MANUAL_ADJUSTMENT' }) }); await loadData(); notify('Списание сохранено в базе данных, остатки и аналитика обновлены'); } setWriteOffRequests(rows => rows.map(row => row.id === id ? { ...row, status: approved ? 'Подтверждена' : 'Отклонена', reviewedBy: userName, reviewedAt: new Date().toISOString() } : row)); } catch (error) { notify(`Не удалось ${approved ? 'подтвердить списание' : 'обработать заявку'}: ${error.message}`); } };
+  const decideWriteOff = (id, approved) => { const request = writeOffRequests.find(row => row.id === id); if (!request || request.status !== 'Ожидает подтверждения') return; if (approved) { const product = products.find(p => String(p.id) === String(request.productId)); if (!product || Number(product.amount) < request.quantity) { notify('Недостаточно остатка для подтверждения'); return; } setProducts(rows => rows.map(p => String(p.id) === String(request.productId) ? { ...p, amount: Math.max(0, Number(p.amount) - request.quantity) } : p)); setStockBatches(rows => rows.map(p => String(p.id) === String(request.productId) ? { ...p, amount: Math.max(0, Number(p.amount) - request.quantity) } : p)); notify('Заявка подтверждена, локальный остаток уменьшен. Для постоянного учёта подключите API списания.'); } setWriteOffRequests(rows => rows.map(row => row.id === id ? { ...row, status: approved ? 'Подтверждена' : 'Отклонена', reviewedBy: userName, reviewedAt: new Date().toISOString() } : row)); };
 
   function Dashboard() { 
     return (
@@ -708,12 +734,8 @@ export default function App() {
             </div>
           </section>
           <section className="panel chart-panel">
-            <SectionTitle title="Динамика остатков" subtitle="История склада, списания и партии с истекающим сроком. Обновление каждую минуту." />
-            {stockTrend.length < 2 ? <EmptyState text="История накапливается автоматически. Первые точки появятся после нескольких измерений; новые данные сохраняются в базе." /> : (() => {
-              const W=720,H=230,pad=32, vals=stockTrend.flatMap(x=>[Number(x.totalQuantity||0),Number(x.expiringQuantity||0)]), max=Math.max(1,...vals), min=0;
-              const points=(key)=>stockTrend.map((x,i)=>`${pad+i*(W-2*pad)/(stockTrend.length-1)},${H-pad-(Number(x[key]||0)-min)/(max-min)*(H-2*pad)}`).join(' ');
-              return <div className="stock-trend-chart"><div className="chart-legend"><span>● Общий доступный остаток</span><span>● Скоро истекает (48 ч)</span></div><svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label="График динамики остатков" style={{width:'100%',height:'auto',display:'block'}}><line x1={pad} y1={H-pad} x2={W-pad} y2={H-pad} stroke="currentColor" opacity=".25"/><line x1={pad} y1={pad} x2={pad} y2={H-pad} stroke="currentColor" opacity=".25"/><polyline points={points('totalQuantity')} fill="none" stroke="#16a34a" strokeWidth="3" strokeLinejoin="round"/><polyline points={points('expiringQuantity')} fill="none" stroke="#f59e0b" strokeWidth="2.5" strokeLinejoin="round"/>{stockTrend.map((x,i)=><circle key={x.timestamp||i} cx={pad+i*(W-2*pad)/(stockTrend.length-1)} cy={H-pad-Number(x.totalQuantity||0)/max*(H-2*pad)} r="2.5" fill="#16a34a"/> )}</svg><small>Точек: {stockTrend.length}. Данные сохраняются в PostgreSQL; частота снимков — около 5 минут.</small></div>;
-            })()}
+            <SectionTitle title="Динамика остатков" subtitle="График появится после накопления фактической истории движения продуктов." />
+            <EmptyState text="Пока нет данных для построения графика. Зарегистрируйте поставки и движения продуктов." />
           </section>
           <section className="panel">
             <SectionTitle title="Последние заказы" subtitle="Обновление списка вручную" action="Все заказы" onAction={() => changePage('Заказы')} />
@@ -760,30 +782,7 @@ export default function App() {
               <strong>Товары на складе</strong>
               <span className="muted"> {filteredProducts.length} позиций</span>
             </div>
-            <button className="button secondary small" onClick={async () => {
-              try {
-                const to = new Date();
-                const from = new Date(to.getTime() - 30 * 24 * 60 * 60 * 1000);
-                const asLocalDateTime = value => {
-                  const pad = part => String(part).padStart(2, '0');
-                  return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}T${pad(value.getHours())}:${pad(value.getMinutes())}:${pad(value.getSeconds())}`;
-                };
-                const query = `from=${encodeURIComponent(asLocalDateTime(from))}&to=${encodeURIComponent(asLocalDateTime(to))}`;
-                const report = await apiRequest(`/api/analytics/export?${query}`);
-                const blob = new Blob([report], { type: 'text/csv;charset=UTF-8' });
-                const url = URL.createObjectURL(blob);
-                const link = document.createElement('a');
-                link.href = url;
-                link.download = `warehouse-report-${to.toISOString().slice(0, 10)}.csv`;
-                document.body.appendChild(link);
-                link.click();
-                link.remove();
-                setTimeout(() => URL.revokeObjectURL(url), 1000);
-                notify('Отчёт склада успешно скачан');
-              } catch (error) {
-                notify(error?.status === 403 ? 'Нет доступа к экспорту отчёта. Проверьте роль пользователя.' : error?.message || 'Не удалось скачать отчёт склада');
-              }
-            }}>
+            <button className="button secondary small" onClick={() => notify('Экспорт будет доступен после подключения сервера')}>
               <Download size={15} /> Экспорт
             </button>
           </div>
@@ -1003,44 +1002,20 @@ export default function App() {
               <option>90 дней</option>
             </select>
           </div>
-          <button className="button secondary" onClick={async () => {
-            try {
-              const days = range === '7 дней' ? 7 : range === '90 дней' ? 90 : 30;
-              const to = new Date();
-              const from = new Date(to.getTime() - days * 24 * 60 * 60 * 1000);
-              const asLocalDateTime = value => {
-                const pad = part => String(part).padStart(2, '0');
-                return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}T${pad(value.getHours())}:${pad(value.getMinutes())}:${pad(value.getSeconds())}`;
-              };
-              const query = `from=${encodeURIComponent(asLocalDateTime(from))}&to=${encodeURIComponent(asLocalDateTime(to))}`;
-              const report = await apiRequest(`/api/analytics/export?${query}`);
-              const blob = new Blob([report], { type: 'text/csv;charset=UTF-8' });
-              const url = URL.createObjectURL(blob);
-              const link = document.createElement('a');
-              link.href = url;
-              link.download = `warehouse-analytics-${to.toISOString().slice(0, 10)}.csv`;
-              document.body.appendChild(link);
-              link.click();
-              link.remove();
-              URL.revokeObjectURL(url);
-              notify('Отчёт успешно скачан');
-            } catch (error) {
-              notify(error?.message || 'Не удалось скачать отчёт');
-            }
-          }}>
+          <button className="button secondary" onClick={() => notify('Отчёт в файле пока не поддерживается API')}>
             <Download size={16} /> Скачать отчёт
           </button>
         </div>
         <div className="stats-grid">
-          <StatCard icon={Trash2} label="Списано продуктов" value={writeOffs.reduce((sum, item) => sum + Number(item.totalQuantity || 0), 0).toLocaleString('ru-RU')} hint={`${writeOffs.length} строк отчёта; сумма количества в единицах продуктов`} tone="orange" />
-          <StatCard icon={ChartNoAxesCombined} label="Доля списаний" value={`${(products.length ? products.reduce((sum, p) => { const written = writeOffs.filter(w => w.product === p.name).reduce((n, w) => n + Number(w.totalQuantity || 0), 0); const base = Math.max(0, Number(p.amount || 0)) + written; return sum + (base > 0 ? written / base : 0); }, 0) / products.length * 100 : 0).toLocaleString('ru-RU', { maximumFractionDigits: 1 })}%`} hint="Средняя доля по продуктам за выбранный период" tone="green" />
+          <StatCard icon={Trash2} label="Списано продуктов" value={writeOffs.reduce((sum, item) => sum + Number(item.totalQuantity || 0), 0).toLocaleString('ru-RU')} hint={`${writeOffs.length} позиций в отчёте`} tone="orange" />
+          <StatCard icon={ChartNoAxesCombined} label="Доля списаний" value="—" hint="доля списаний не входит в текущий API" tone="green" />
           <StatCard icon={AlertTriangle} label="Дефицитных ингредиентов" value={products.filter(p => p.amount <= 0).length} hint="по текущим остаткам" tone="red" />
-          <StatCard icon={Ban} label="Прогноз стоп-листа" value={stopItems.length} hint="блюд уже в стоп-листе по текущим остаткам" tone="purple" />
+          <StatCard icon={Ban} label="Прогноз стоп-листа" value="—" hint="нужны рецептуры и история" tone="purple" />
         </div>
         <div className="analytics-grid">
           <section className="panel">
             <SectionTitle title="Списания по категориям" subtitle={`Период: ${range.toLowerCase()}`} />
-            {writeOffs.length ? <div className="table-wrap"><table><thead><tr><th>Продукт</th><th>Причина</th><th>Списано</th><th>Ед.</th></tr></thead><tbody>{writeOffs.map((item, i) => <tr key={`${item.product}-${item.reason}-${i}`}><td>{item.product}</td><td>{{ EXPIRED: 'Просрочка', SOLD: 'Продажа', MANUAL_ADJUSTMENT: 'Ручная корректировка', SPOILAGE: 'Порча и брак', KITCHEN_ERROR: 'Ошибки на кухне или в зале', STAFF_MEAL: 'Питание персонала' }[item.reason] || item.reason}</td><td className="strong-cell">{item.totalQuantity}</td><td>{item.unit}</td></tr>)}</tbody></table></div> : <EmptyState text="Сервер пока не вернул записи о списаниях." />}
+            {writeOffs.length ? <div className="table-wrap"><table><thead><tr><th>Продукт</th><th>Причина</th><th>Списано</th><th>Ед.</th></tr></thead><tbody>{writeOffs.map((item, i) => <tr key={`${item.product}-${item.reason}-${i}`}><td>{item.product}</td><td>{item.reason}</td><td className="strong-cell">{item.totalQuantity}</td><td>{item.unit}</td></tr>)}</tbody></table></div> : <EmptyState text="Сервер пока не вернул записи о списаниях." />}
           </section>
           <section className="panel">
             <SectionTitle title="Потребность в поставках" subtitle="По текущим остаткам" />
@@ -1066,7 +1041,7 @@ export default function App() {
   function WriteOffsPage() { return (<>
     <SectionTitle title="Списания" subtitle="Сотрудники отправляют заявки, администратор проверяет и принимает решение." />
     <div className="toolbar"><span className="toolbar-note"><ClipboardList size={18} /> {writeOffRequests.length} заявок</span><button className="button primary" onClick={() => openModal('writeoff')}><Plus size={16} /> Заявка на списание</button></div>
-    <section className="panel"><div className="writeoff-list">{writeOffRequests.length ? writeOffRequests.map(item => <article className="writeoff-card" key={item.id}><div className="writeoff-card-main"><strong>{item.product} · {item.quantity} {item.unit}</strong><p>{item.reason}{item.comment ? ` — ${item.comment}` : ''}</p><small>Создал: {item.requestedBy} · {new Date(item.createdAt).toLocaleString('ru-RU')}</small>{item.reviewedBy && <small>Решение: {item.reviewedBy}</small>}</div><div className="writeoff-actions"><Status tone={item.status === 'Подтверждена' ? 'green' : item.status === 'Отклонена' ? 'red' : 'amber'}>{item.status}</Status>{currentUser?.role === 'admin' && item.status === 'Ожидает подтверждения' && <><button className="button primary small" onClick={() => decideWriteOff(item.id, true)}><Check size={14}/> Подтвердить</button><button className="button secondary small" onClick={() => decideWriteOff(item.id, false)}>Отклонить</button></>}</div></article>) : <EmptyState text="Заявок на списание пока нет." />}</div><p className="form-hint">Поданные заявки хранятся в этом браузере; подтверждённые списания сохраняются на сервере и учитываются в аналитике.</p></section>
+    <section className="panel"><div className="writeoff-list">{writeOffRequests.length ? writeOffRequests.map(item => <article className="writeoff-card" key={item.id}><div className="writeoff-card-main"><strong>{item.product} · {item.quantity} {item.unit}</strong><p>{item.reason}{item.comment ? ` — ${item.comment}` : ''}</p><small>Создал: {item.requestedBy} · {new Date(item.createdAt).toLocaleString('ru-RU')}</small>{item.reviewedBy && <small>Решение: {item.reviewedBy}</small>}</div><div className="writeoff-actions"><Status tone={item.status === 'Подтверждена' ? 'green' : item.status === 'Отклонена' ? 'red' : 'amber'}>{item.status}</Status>{currentUser?.role === 'admin' && item.status === 'Ожидает подтверждения' && <><button className="button primary small" onClick={() => decideWriteOff(item.id, true)}><Check size={14}/> Подтвердить</button><button className="button secondary small" onClick={() => decideWriteOff(item.id, false)}>Отклонить</button></>}</div></article>) : <EmptyState text="Заявок на списание пока нет." />}</div><p className="form-hint">Подтверждения сохраняются в этом браузере. Для фактического списания из складского остатка необходимо подключить серверный API.</p></section>
   </>); }
 
   function SettingsPage() { 

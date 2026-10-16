@@ -81,7 +81,7 @@ CREATE TABLE IF NOT EXISTS write_off_logs (
     write_off_date TIMESTAMP WITHOUT TIME ZONE NOT NULL,
     reason VARCHAR(40) NOT NULL,
     CONSTRAINT ck_write_off_quantity_positive CHECK (quantity > 0),
-    CONSTRAINT ck_write_off_reason CHECK (reason IN ('EXPIRED', 'SOLD', 'MANUAL_ADJUSTMENT', 'SPOILAGE', 'KITCHEN_ERROR', 'STAFF_MEAL'))
+    CONSTRAINT ck_write_off_reason CHECK (reason IN ('EXPIRED', 'SOLD', 'MANUAL_ADJUSTMENT'))
 );
 CREATE INDEX IF NOT EXISTS idx_wol_date ON write_off_logs(write_off_date DESC);
 CREATE INDEX IF NOT EXISTS idx_write_off_batch ON write_off_logs(batch_id);

@@ -8,6 +8,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import ru.flagman.monitoring.dto.OrderRequest;
 import ru.flagman.monitoring.dto.OrderResponse;
+import ru.flagman.monitoring.dto.OrderStatusUpdateRequest;
 import ru.flagman.monitoring.model.OrderStatus;
 import ru.flagman.monitoring.service.OrderService;
 
@@ -32,6 +33,14 @@ public class OrderController {
         return ResponseEntity.status(status).body(resp);
     }
 
+    /** Изменение рабочего статуса заказа без повторного списания ингредиентов. */
+    @PatchMapping("/{id}/status")
+    public OrderResponse updateStatus(@PathVariable Long id,
+                                      @Valid @RequestBody OrderStatusUpdateRequest request) {
+        return orderService.updateStatus(id, request.status());
+    }
+
+    /** Совместимость со старым клиентом. */
     @PatchMapping("/{id}/complete")
     public OrderResponse complete(@PathVariable Long id) { return orderService.complete(id); }
 }

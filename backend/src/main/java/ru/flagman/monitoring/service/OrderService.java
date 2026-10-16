@@ -115,6 +115,25 @@ public class OrderService {
     }
 
     @Transactional
+    public OrderResponse updateStatus(Long orderId, OrderStatus newStatus) {
+        Order order = orderRepo.findById(orderId)
+                .orElseThrow(() -> new NotFoundException("Заказ не найден: " + orderId));
+
+        if (order.getStatus() == OrderStatus.CANCELLED_OUT_OF_STOCK) {
+            throw new IllegalStateException("Нельзя изменить статус отклонённого заказа");
+        }
+        if (newStatus == null || !(newStatus == OrderStatus.CREATED
+                || newStatus == OrderStatus.READY
+                || newStatus == OrderStatus.RECEIVED_BY_VISITOR
+                || newStatus == OrderStatus.PAID)) {
+            throw new IllegalArgumentException("Недопустимый статус заказа");
+        }
+
+        order.setStatus(newStatus);
+        return OrderResponse.of(order, List.of());
+    }
+
+    @Transactional
     public OrderResponse complete(Long orderId) {
         Order o = orderRepo.findById(orderId).orElseThrow(() -> new NotFoundException("Заказ не найден: " + orderId));
         if (o.getStatus() != OrderStatus.CREATED) {
