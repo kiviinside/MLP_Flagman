@@ -1,5 +1,5 @@
 // Единый HTTP-клиент фронтенда. Basic Auth нужен каждому запросу.
-// sessionStorage сохраняет вход после обновления страницы, но очищается при закрытии вкладки.
+// sessionStorage сохраняет вход после обновления страницы, но очищается при закрытии вкладки. акакакакак
 const STORAGE_KEY = 'mlp-api-credentials';
 function readCredentials() {
   try { const raw = sessionStorage.getItem(STORAGE_KEY); return raw ? JSON.parse(raw) : null; }
