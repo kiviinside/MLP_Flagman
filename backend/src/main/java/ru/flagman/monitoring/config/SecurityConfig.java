@@ -38,9 +38,7 @@ public class SecurityConfig {
                 .requestMatchers("/api/admin/users/**").hasRole("ADMIN")
                 // Сотрудникам нужен доступ на чтение каталога для работы с заказами,
                 // но любые изменения каталога остаются административными.
-                // Чтение блюд нужно сотрудникам для оформления заказов. Каталог продуктов
-                // пока остаётся ADMIN-only: текущий фронтенд использует GET /products
-                // как проверку роли при входе, поэтому расширять этот маршрут без фронта нельзя.
+                // Чтение блюд нужно сотрудникам для оформления заказов.
                 .requestMatchers(HttpMethod.GET,
                     "/api/admin/dishes", "/api/admin/dishes/**")
                     .hasAnyRole("ADMIN", "STAFF")
@@ -62,10 +60,27 @@ public class SecurityConfig {
                 response.getWriter().write("{\"error\":\"unauthorized\"}");
             }))
             .exceptionHandling(e -> e.accessDeniedHandler((request, response, ex) -> {
+                // ВРЕМЕННАЯ ДИАГНОСТИКА: выясняем, кто именно получает 403.
+                var auth = org.springframework.security.core.context.SecurityContextHolder
+                    .getContext()
+                    .getAuthentication();
+
+                System.err.println("=== ACCESS DENIED ===");
+                System.err.println("URI: " + request.getRequestURI());
+                System.err.println("METHOD: " + request.getMethod());
+                System.err.println("PRINCIPAL: " +
+                    (auth != null ? auth.getName() : "null"));
+                System.err.println("AUTHORITIES: " +
+                    (auth != null ? auth.getAuthorities() : "null"));
+                System.err.println("EXCEPTION: " + ex.getMessage());
+
                 response.setStatus(403);
                 response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-                response.getWriter().write("{\"error\":\"forbidden\",\"message\":\"insufficient_permissions\"}");
+                response.getWriter().write(
+                    "{\"error\":\"forbidden\",\"message\":\"insufficient_permissions\"}"
+                );
             }));
+
         return http.build();
     }
 
@@ -79,10 +94,13 @@ public class SecurityConfig {
             @Value("${app.cors.allowed-origins:http://localhost:5173}") String origins) {
         CorsConfiguration config = new CorsConfiguration();
         config.setAllowedOrigins(Arrays.stream(origins.split(","))
-            .map(String::trim).filter(s -> !s.isEmpty()).toList());
+            .map(String::trim)
+            .filter(s -> !s.isEmpty())
+            .toList());
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept"));
         config.setAllowCredentials(false);
+
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", config);
         return source;
