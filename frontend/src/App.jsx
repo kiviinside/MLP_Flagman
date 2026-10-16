@@ -100,6 +100,7 @@ function EmptyState({ text }) {
 export default function App() {
   const [active, setActive] = useState('Главная');
   const [stockTrend, setStockTrend] = useState([]);
+  const [stockTrendError, setStockTrendError] = useState('');
   const [theme, setTheme] = useState(() => {
     try { return localStorage.getItem('vkus-balans-theme') || 'system'; } 
     catch { return 'system'; }
@@ -124,14 +125,26 @@ export default function App() {
     const refresh = async () => {
       try {
         const rows = await apiRequest('/api/warehouse/stock-trend');
-        if (alive && Array.isArray(rows)) setStockTrend(rows);
+        if (!alive) return;
+        if (Array.isArray(rows)) {
+          setStockTrend(rows);
+          setStockTrendError('');
+        } else {
+          setStockTrendError('API /api/warehouse/stock-trend вернул ответ не в формате массива.');
+        }
       } catch (e) {
-        console.warn('Не удалось обновить динамику остатков', e);
+        if (alive) {
+          setStockTrendError(e?.message || 'Не удалось загрузить историю остатков.');
+          console.warn('Не удалось обновить динамику остатков', e);
+        }
       }
     };
     if (signedIn) {
       refresh();
       timer = setInterval(refresh, 60000);
+    } else {
+      setStockTrend([]);
+      setStockTrendError('');
     }
     return () => {
       alive = false;
@@ -756,9 +769,11 @@ export default function App() {
             </div>
           </section>
           <section className="panel chart-panel">
-            <SectionTitle title="Динамика остатков" subtitle="История склада и продуктов с истекающим сроком. Обновление каждую минуту." />
-            {stockTrend.length < 2 ? (
-              <EmptyState text="История накапливается автоматически. Первые точки появятся после нескольких измерений; новые данные сохраняются в базе." />
+            <SectionTitle title="Динамика остатков" subtitle="Данные загружаются из /api/warehouse/stock-trend. Обновление каждую минуту." />
+            {stockTrendError ? (
+              <EmptyState text={`Не удалось загрузить график: ${stockTrendError}`} />
+            ) : stockTrend.length === 0 ? (
+              <EmptyState text="Backend ответил без снимков истории. Первый снимок создаётся автоматически; проверьте endpoint /api/warehouse/stock-trend и таблицу stock_snapshots." />
             ) : (() => {
               const W = 720, H = 230, pad = 32;
               const values = stockTrend.flatMap(x => [
@@ -766,7 +781,9 @@ export default function App() {
                 Number(x.expiringQuantity || 0)
               ]);
               const max = Math.max(1, ...values);
-              const xAt = i => pad + i * (W - 2 * pad) / (stockTrend.length - 1);
+              const xAt = i => stockTrend.length === 1
+                ? W / 2
+                : pad + i * (W - 2 * pad) / (stockTrend.length - 1);
               const yAt = value => H - pad - Number(value || 0) / max * (H - 2 * pad);
               const points = key => stockTrend
                 .map((x, i) => `${xAt(i)},${yAt(x[key])}`)
@@ -774,8 +791,8 @@ export default function App() {
               return (
                 <div className="stock-trend-chart">
                   <div className="chart-legend">
-                    <span>● Общий доступный остаток</span>
-                    <span>● Скоро истекает (48 ч)</span>
+                    <span style={{ color: '#16a34a' }}>● Общий доступный остаток</span>
+                    <span style={{ color: '#f59e0b' }}>● Скоро истекает (48 ч)</span>
                   </div>
                   <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label="График динамики остатков" style={{ width: '100%', height: 'auto', display: 'block' }}>
                     <line x1={pad} y1={H - pad} x2={W - pad} y2={H - pad} stroke="currentColor" opacity=".25" />
@@ -783,10 +800,13 @@ export default function App() {
                     <polyline points={points('totalQuantity')} fill="none" stroke="#16a34a" strokeWidth="3" strokeLinejoin="round" />
                     <polyline points={points('expiringQuantity')} fill="none" stroke="#f59e0b" strokeWidth="2.5" strokeLinejoin="round" />
                     {stockTrend.map((x, i) => (
-                      <circle key={x.timestamp || i} cx={xAt(i)} cy={yAt(x.totalQuantity)} r="2.5" fill="#16a34a" />
+                      <g key={x.timestamp || i}>
+                        <circle cx={xAt(i)} cy={yAt(x.totalQuantity)} r="4" fill="#16a34a" />
+                        <circle cx={xAt(i)} cy={yAt(x.expiringQuantity)} r="3" fill="#f59e0b" />
+                      </g>
                     ))}
                   </svg>
-                  <small>Точек: {stockTrend.length}. Данные сохраняются в PostgreSQL; частота снимков — около 5 минут.</small>
+                  <small>Загружено снимков: {stockTrend.length}. Временная метка последнего: {String(stockTrend[stockTrend.length - 1].timestamp || 'не указана').replace('T', ' ')}</small>
                 </div>
               );
             })()}
