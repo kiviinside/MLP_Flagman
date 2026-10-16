@@ -4,7 +4,7 @@ import {
   LayoutDashboard, Truck, ClipboardList, Boxes, Clock3, Ban, Flame, 
   ChartNoAxesCombined, Settings, Bell, Search, Plus, ChevronRight, Menu, X, 
   ChefHat, UtensilsCrossed, ArrowUpRight, PackagePlus, ShoppingBasket, FileChartColumn, 
-  CircleHelp, LogOut, Check, AlertTriangle, CalendarDays, Filter, Download, 
+  CircleHelp, LogOut, Check, AlertTriangle, CalendarDays, Filter, 
   CircleCheck, Trash2, RefreshCw 
 } from 'lucide-react';
 import { apiRequest, setApiCredentials, clearApiCredentials } from './api/http.js';
@@ -955,9 +955,6 @@ export default function App() {
               <strong>Товары на складе</strong>
               <span className="muted"> {filteredProducts.length} позиций</span>
             </div>
-            <button className="button secondary small" onClick={() => notify('Экспорт будет доступен после подключения сервера')}>
-              <Download size={15} /> Экспорт
-            </button>
           </div>
           {tableProducts}
         </section>
@@ -1173,9 +1170,6 @@ export default function App() {
               <option>90 дней</option>
             </select>
           </div>
-          <button className="button secondary" onClick={() => notify('Отчёт в файле пока не поддерживается API')}>
-            <Download size={16} /> Скачать отчёт
-          </button>
         </div>
         <div className="stats-grid">
           <StatCard icon={Trash2} label="Списано продуктов" value={writeOffs.reduce((sum, item) => sum + Number(item.totalQuantity || 0), 0).toLocaleString('ru-RU')} hint={`${writeOffs.length} позиций в отчёте`} tone="orange" />
