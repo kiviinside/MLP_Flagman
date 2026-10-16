@@ -101,6 +101,7 @@ export default function App() {
   const [active, setActive] = useState('Главная');
   const [stockTrend, setStockTrend] = useState([]);
   const [stockTrendError, setStockTrendError] = useState('');
+  const [stockTrendLoading, setStockTrendLoading] = useState(false);
   const [theme, setTheme] = useState(() => {
     try { return localStorage.getItem('vkus-balans-theme') || 'system'; } 
     catch { return 'system'; }
@@ -123,6 +124,7 @@ export default function App() {
     let alive = true;
     let timer;
     const refresh = async () => {
+      setStockTrendLoading(true);
       try {
         const rows = await apiRequest('/api/warehouse/stock-trend');
         if (!alive) return;
@@ -137,6 +139,8 @@ export default function App() {
           setStockTrendError(e?.message || 'Не удалось загрузить историю остатков.');
           console.warn('Не удалось обновить динамику остатков', e);
         }
+      } finally {
+        if (alive) setStockTrendLoading(false);
       }
     };
     if (signedIn) {
@@ -145,6 +149,7 @@ export default function App() {
     } else {
       setStockTrend([]);
       setStockTrendError('');
+      setStockTrendLoading(false);
     }
     return () => {
       alive = false;
@@ -670,7 +675,6 @@ export default function App() {
             <th>№ поставки</th>
             <th>Поставщик</th>
             <th>Дата</th>
-            <th>Сумма</th>
             <th>Статус</th>
           </tr>
         </thead>
@@ -681,10 +685,9 @@ export default function App() {
                 <td className="purple-text">#{s.id}</td>
                 <td>{s.supplier}</td>
                 <td>{s.date}</td>
-                <td className="strong-cell">{s.amount ? money(s.amount) : "—"}</td>
                 <td><Status>{s.status}</Status></td>
               </tr>
-              <tr className="supply-items-row"><td colSpan="5"><strong>Состав поставки:</strong>{s.items?.length ? <div className="supply-item-chips">{s.items.map((item, i) => <span key={`${s.id}-${i}`}>{item.name} — {item.quantity} {item.unit}, годен до {item.expiry}</span>)}</div> : <span className="muted-inline">Состав не указан</span>}</td></tr>
+              <tr className="supply-items-row"><td colSpan="4"><strong>Состав поставки:</strong>{s.items?.length ? <div className="supply-item-chips">{s.items.map((item, i) => <span key={`${s.id}-${i}`}>{item.name} — {item.quantity} {item.unit}, годен до {item.expiry}</span>)}</div> : <span className="muted-inline">Состав не указан</span>}</td></tr>
             </React.Fragment>
           ))}
         </tbody>
@@ -770,10 +773,15 @@ export default function App() {
           </section>
           <section className="panel chart-panel">
             <SectionTitle title="Динамика остатков" subtitle="Данные загружаются из /api/warehouse/stock-trend. Обновление каждую минуту." />
-            {stockTrendError ? (
+            {stockTrendLoading && stockTrend.length === 0 ? (
+              <div className="chart-loading" role="status" aria-live="polite">
+                <span className="loading-spinner" aria-hidden="true" />
+                <span>Загружаем динамику остатков…</span>
+              </div>
+            ) : stockTrendError ? (
               <EmptyState text={`Не удалось загрузить график: ${stockTrendError}`} />
             ) : stockTrend.length === 0 ? (
-              <EmptyState text="Backend ответил без снимков истории. Первый снимок создаётся автоматически; проверьте endpoint /api/warehouse/stock-trend и таблицу stock_snapshots." />
+              <EmptyState text="История остатков пока не накоплена. График появится после получения первых данных с сервера." />
             ) : (() => {
               const W = 720, H = 230, pad = 32;
               const values = stockTrend.flatMap(x => [
@@ -788,6 +796,7 @@ export default function App() {
               const points = key => stockTrend
                 .map((x, i) => `${xAt(i)},${yAt(x[key])}`)
                 .join(' ');
+              const area = key => `${pad},${H - pad} ${points(key)} ${W - pad},${H - pad}`;
               return (
                 <div className="stock-trend-chart">
                   <div className="chart-legend">
@@ -795,10 +804,20 @@ export default function App() {
                     <span style={{ color: '#f59e0b' }}>● Скоро истекает (48 ч)</span>
                   </div>
                   <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label="График динамики остатков" style={{ width: '100%', height: 'auto', display: 'block' }}>
-                    <line x1={pad} y1={H - pad} x2={W - pad} y2={H - pad} stroke="currentColor" opacity=".25" />
-                    <line x1={pad} y1={pad} x2={pad} y2={H - pad} stroke="currentColor" opacity=".25" />
-                    <polyline points={points('totalQuantity')} fill="none" stroke="#16a34a" strokeWidth="3" strokeLinejoin="round" />
-                    <polyline points={points('expiringQuantity')} fill="none" stroke="#f59e0b" strokeWidth="2.5" strokeLinejoin="round" />
+                    <defs>
+                      <linearGradient id="stockAreaGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#8b5cf6" stopOpacity=".28" />
+                        <stop offset="100%" stopColor="#8b5cf6" stopOpacity=".015" />
+                      </linearGradient>
+                    </defs>
+                    {[0, 1, 2, 3].map(tick => {
+                      const y = pad + tick * (H - 2 * pad) / 3;
+                      return <line key={tick} x1={pad} y1={y} x2={W - pad} y2={y} stroke="currentColor" opacity=".10" strokeDasharray="4 5" />;
+                    })}
+                    <line x1={pad} y1={H - pad} x2={W - pad} y2={H - pad} stroke="currentColor" opacity=".28" />
+                    <polygon points={area('totalQuantity')} fill="url(#stockAreaGradient)" />
+                    <polyline points={points('totalQuantity')} fill="none" stroke="#8b5cf6" strokeWidth="3.5" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+                    <polyline points={points('expiringQuantity')} fill="none" stroke="#f59e0b" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
                     {stockTrend.map((x, i) => (
                       <g key={x.timestamp || i}>
                         <circle cx={xAt(i)} cy={yAt(x.totalQuantity)} r="4" fill="#16a34a" />
@@ -856,9 +875,6 @@ export default function App() {
               <strong>Товары на складе</strong>
               <span className="muted"> {filteredProducts.length} позиций</span>
             </div>
-            <button className="button secondary small" onClick={() => notify('Экспорт будет доступен после подключения сервера')}>
-              <Download size={15} /> Экспорт
-            </button>
           </div>
           {tableProducts}
         </section>
@@ -1076,9 +1092,6 @@ export default function App() {
               <option>90 дней</option>
             </select>
           </div>
-          <button className="button secondary" onClick={() => notify('Отчёт в файле пока не поддерживается API')}>
-            <Download size={16} /> Скачать отчёт
-          </button>
         </div>
         <div className="stats-grid">
           <StatCard icon={Trash2} label="Списано продуктов" value={writeOffs.reduce((sum, item) => sum + Number(item.totalQuantity || 0), 0).toLocaleString('ru-RU')} hint={`${writeOffs.length} позиций в отчёте`} tone="orange" />
