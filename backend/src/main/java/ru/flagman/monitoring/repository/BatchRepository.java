@@ -14,6 +14,8 @@ public interface BatchRepository extends JpaRepository<Batch, Long> {
 
     boolean existsByProduct_Id(Long productId);
 
+    List<Batch> findAllByOrderBySupplyDateAsc();
+
     @Query("select b from Batch b join fetch b.product order by b.supplyDate desc, b.id desc")
     List<Batch> findAllForSupplyHistory();
 

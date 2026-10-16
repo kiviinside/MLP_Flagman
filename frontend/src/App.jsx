@@ -100,8 +100,8 @@ function EmptyState({ text }) {
 export default function App() {
   const [active, setActive] = useState('Главная');
   const [stockTrend, setStockTrend] = useState([]);
+  const [stockTrendPeriod, setStockTrendPeriod] = useState('24h');
   const [stockTrendError, setStockTrendError] = useState('');
-  const [stockTrendLoading, setStockTrendLoading] = useState(false);
   const [theme, setTheme] = useState(() => {
     try { return localStorage.getItem('vkus-balans-theme') || 'system'; } 
     catch { return 'system'; }
@@ -124,7 +124,6 @@ export default function App() {
     let alive = true;
     let timer;
     const refresh = async () => {
-      setStockTrendLoading(true);
       try {
         const rows = await apiRequest('/api/warehouse/stock-trend');
         if (!alive) return;
@@ -139,8 +138,6 @@ export default function App() {
           setStockTrendError(e?.message || 'Не удалось загрузить историю остатков.');
           console.warn('Не удалось обновить динамику остатков', e);
         }
-      } finally {
-        if (alive) setStockTrendLoading(false);
       }
     };
     if (signedIn) {
@@ -149,7 +146,6 @@ export default function App() {
     } else {
       setStockTrend([]);
       setStockTrendError('');
-      setStockTrendLoading(false);
     }
     return () => {
       alive = false;
@@ -600,8 +596,7 @@ export default function App() {
             <tr key={p.id}>
               <td>
                 <span className="product-name">
-                  <img className="food-emoji" src={p.image} alt={p.name} />
-                  {p.name}
+                                    {p.name}
                 </span>
               </td>
               <td className="strong-cell">{p.amount}</td>
@@ -675,6 +670,7 @@ export default function App() {
             <th>№ поставки</th>
             <th>Поставщик</th>
             <th>Дата</th>
+            <th>Сумма</th>
             <th>Статус</th>
           </tr>
         </thead>
@@ -685,9 +681,10 @@ export default function App() {
                 <td className="purple-text">#{s.id}</td>
                 <td>{s.supplier}</td>
                 <td>{s.date}</td>
+                <td className="strong-cell">{s.amount ? money(s.amount) : "—"}</td>
                 <td><Status>{s.status}</Status></td>
               </tr>
-              <tr className="supply-items-row"><td colSpan="4"><strong>Состав поставки:</strong>{s.items?.length ? <div className="supply-item-chips">{s.items.map((item, i) => <span key={`${s.id}-${i}`}>{item.name} — {item.quantity} {item.unit}, годен до {item.expiry}</span>)}</div> : <span className="muted-inline">Состав не указан</span>}</td></tr>
+              <tr className="supply-items-row"><td colSpan="5"><strong>Состав поставки:</strong>{s.items?.length ? <div className="supply-item-chips">{s.items.map((item, i) => <span key={`${s.id}-${i}`}>{item.name} — {item.quantity} {item.unit}, годен до {item.expiry}</span>)}</div> : <span className="muted-inline">Состав не указан</span>}</td></tr>
             </React.Fragment>
           ))}
         </tbody>
@@ -746,8 +743,7 @@ export default function App() {
             <div className="expiry-list">
               {expiring.slice(0, 4).map(p => (
                 <div className="expiry-item" key={p.id}>
-                  <img className="food-emoji" src={p.image} alt={p.name} />
-                  <div className="expiry-info">
+                                    <div className="expiry-info">
                     <strong>{p.name}</strong>
                     <small>{p.amount} {p.unit} · до {p.expiry}</small>
                   </div>
@@ -772,60 +768,95 @@ export default function App() {
             </div>
           </section>
           <section className="panel chart-panel">
-            <SectionTitle title="Динамика остатков" subtitle="Данные загружаются из /api/warehouse/stock-trend. Обновление каждую минуту." />
-            {stockTrendLoading && stockTrend.length === 0 ? (
-              <div className="chart-loading" role="status" aria-live="polite">
-                <span className="loading-spinner" aria-hidden="true" />
-                <span>Загружаем динамику остатков…</span>
-              </div>
-            ) : stockTrendError ? (
+            <SectionTitle title="Пульс склада" subtitle="Остаток, поступления и расход. Данные обновляются автоматически." />
+            {stockTrendError ? (
               <EmptyState text={`Не удалось загрузить график: ${stockTrendError}`} />
             ) : stockTrend.length === 0 ? (
-              <EmptyState text="История остатков пока не накоплена. График появится после получения первых данных с сервера." />
+              <EmptyState text="История склада пока собирается. Снимки создаются автоматически примерно раз в 5 минут." />
             ) : (() => {
-              const W = 720, H = 230, pad = 32;
-              const values = stockTrend.flatMap(x => [
-                Number(x.totalQuantity || 0),
-                Number(x.expiringQuantity || 0)
-              ]);
-              const max = Math.max(1, ...values);
-              const xAt = i => stockTrend.length === 1
-                ? W / 2
-                : pad + i * (W - 2 * pad) / (stockTrend.length - 1);
-              const yAt = value => H - pad - Number(value || 0) / max * (H - 2 * pad);
-              const points = key => stockTrend
-                .map((x, i) => `${xAt(i)},${yAt(x[key])}`)
-                .join(' ');
-              const area = key => `${pad},${H - pad} ${points(key)} ${W - pad},${H - pad}`;
+              const periodMs = stockTrendPeriod === '24h' ? 24 * 60 * 60 * 1000
+                : stockTrendPeriod === '7d' ? 7 * 24 * 60 * 60 * 1000
+                : 30 * 24 * 60 * 60 * 1000;
+              const now = Date.now();
+              const filtered = stockTrend.filter(x => {
+                const t = new Date(x.timestamp).getTime();
+                return Number.isFinite(t) && t >= now - periodMs;
+              });
+              const source = filtered.length ? filtered : stockTrend.slice(-1);
+              const step = Math.max(1, Math.ceil(source.length / 150));
+              const rows = source.filter((x, i) => i % step === 0 || i === source.length - 1);
+              const W = 720, H = 250, padL = 42, padR = 18, padT = 18, padB = 32;
+              const keys = [
+                { key: 'totalQuantity', label: 'Остаток на складе', color: '#16a34a' },
+                { key: 'received24h', label: 'Поступления за 24 ч', color: '#3b82f6' },
+                { key: 'used24h', label: 'Расход за 24 ч', color: '#f59e0b' }
+              ];
+              const max = Math.max(1, ...rows.flatMap(x => keys.map(k => Number(x[k.key] || 0))));
+              const xAt = i => rows.length === 1 ? (W + padL - padR) / 2
+                : padL + i * (W - padL - padR) / (rows.length - 1);
+              const yAt = value => H - padB - Number(value || 0) / max * (H - padT - padB);
+              const points = key => rows.map((x, i) => `${xAt(i)},${yAt(x[key])}`).join(' ');
+              const fmt = value => new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 1 }).format(Number(value || 0));
+              const last = rows[rows.length - 1];
+              const fmtTime = value => {
+                const d = new Date(value);
+                return stockTrendPeriod === '24h'
+                  ? d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
+                  : d.toLocaleDateString('ru-RU', { day: '2-digit', month: 'short' });
+              };
               return (
                 <div className="stock-trend-chart">
-                  <div className="chart-legend">
-                    <span style={{ color: '#16a34a' }}>● Общий доступный остаток</span>
-                    <span style={{ color: '#f59e0b' }}>● Скоро истекает (48 ч)</span>
-                  </div>
-                  <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label="График динамики остатков" style={{ width: '100%', height: 'auto', display: 'block' }}>
-                    <defs>
-                      <linearGradient id="stockAreaGradient" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#8b5cf6" stopOpacity=".28" />
-                        <stop offset="100%" stopColor="#8b5cf6" stopOpacity=".015" />
-                      </linearGradient>
-                    </defs>
-                    {[0, 1, 2, 3].map(tick => {
-                      const y = pad + tick * (H - 2 * pad) / 3;
-                      return <line key={tick} x1={pad} y1={y} x2={W - pad} y2={y} stroke="currentColor" opacity=".10" strokeDasharray="4 5" />;
-                    })}
-                    <line x1={pad} y1={H - pad} x2={W - pad} y2={H - pad} stroke="currentColor" opacity=".28" />
-                    <polygon points={area('totalQuantity')} fill="url(#stockAreaGradient)" />
-                    <polyline points={points('totalQuantity')} fill="none" stroke="#8b5cf6" strokeWidth="3.5" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
-                    <polyline points={points('expiringQuantity')} fill="none" stroke="#f59e0b" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
-                    {stockTrend.map((x, i) => (
-                      <g key={x.timestamp || i}>
-                        <circle cx={xAt(i)} cy={yAt(x.totalQuantity)} r="4" fill="#16a34a" />
-                        <circle cx={xAt(i)} cy={yAt(x.expiringQuantity)} r="3" fill="#f59e0b" />
-                      </g>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
+                    {[['24h', '24 часа'], ['7d', '7 дней'], ['30d', '30 дней']].map(([value, label]) => (
+                      <button
+                        key={value}
+                        type="button"
+                        className={`button small ${stockTrendPeriod === value ? 'primary' : 'secondary'}`}
+                        onClick={() => setStockTrendPeriod(value)}
+                        aria-pressed={stockTrendPeriod === value}
+                      >{label}</button>
                     ))}
-                  </svg>
-                  <small>Загружено снимков: {stockTrend.length}. Временная метка последнего: {String(stockTrend[stockTrend.length - 1].timestamp || 'не указана').replace('T', ' ')}</small>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(145px, 1fr))', gap: 10, marginBottom: 12 }}>
+                    {keys.map(k => (
+                      <div key={k.key} style={{ border: '1px solid var(--border, #e5e7eb)', borderRadius: 12, padding: '10px 12px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 7, color: k.color, fontSize: 12, marginBottom: 5 }}>
+                          <span style={{ width: 8, height: 8, borderRadius: '50%', background: k.color, display: 'inline-block' }} />
+                          {k.label}
+                        </div>
+                        <strong style={{ fontSize: 20 }}>{fmt(last[k.key])}</strong>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ overflowX: 'auto' }}>
+                    <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Динамика остатка, поступлений и расхода" style={{ width: '100%', minWidth: 320, height: 'auto', display: 'block' }}>
+                      {[0, .25, .5, .75, 1].map(r => {
+                        const y = H - padB - r * (H - padT - padB);
+                        return <g key={r}>
+                          <line x1={padL} y1={y} x2={W - padR} y2={y} stroke="currentColor" opacity=".12" strokeDasharray="3 4" />
+                          <text x={padL - 8} y={y + 4} fontSize="10" textAnchor="end" fill="currentColor" opacity=".65">{fmt(max * r)}</text>
+                        </g>;
+                      })}
+                      {keys.map(k => (
+                        <g key={k.key}>
+                          <polyline points={points(k.key)} fill="none" stroke={k.color} strokeWidth={k.key === 'totalQuantity' ? 3 : 2.5} strokeLinejoin="round" strokeLinecap="round" />
+                          {rows.map((x, i) => (
+                            <circle key={`${k.key}-${x.timestamp || i}`} cx={xAt(i)} cy={yAt(x[k.key])} r={rows.length < 30 ? 3 : 1.7} fill={k.color}>
+                              <title>{`${k.label}: ${fmt(x[k.key])} · ${new Date(x.timestamp).toLocaleString('ru-RU')}`}</title>
+                            </circle>
+                          ))}
+                        </g>
+                      ))}
+                      <text x={padL} y={H - 8} fontSize="10" fill="currentColor" opacity=".65">{fmtTime(rows[0].timestamp)}</text>
+                      <text x={W - padR} y={H - 8} fontSize="10" textAnchor="end" fill="currentColor" opacity=".65">{fmtTime(rows[rows.length - 1].timestamp)}</text>
+                    </svg>
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14, marginTop: 10, fontSize: 12 }}>
+                    {keys.map(k => <span key={k.key} style={{ color: k.color }}>● {k.label}</span>)}
+                  </div>
+                  <small style={{ display: 'block', marginTop: 10, opacity: .7 }}>
+                    Поступления и расход — фактические операции за скользящие 24 часа на момент каждого снимка. Точек в истории: {stockTrend.length}.
+                  </small>
                 </div>
               );
             })()}
@@ -875,6 +906,9 @@ export default function App() {
               <strong>Товары на складе</strong>
               <span className="muted"> {filteredProducts.length} позиций</span>
             </div>
+            <button className="button secondary small" onClick={() => notify('Экспорт будет доступен после подключения сервера')}>
+              <Download size={15} /> Экспорт
+            </button>
           </div>
           {tableProducts}
         </section>
@@ -910,8 +944,7 @@ export default function App() {
                   <tr key={p.id}>
                     <td>
                       <span className="product-name">
-                        <img className="food-emoji" src={p.image} alt={p.name} />
-                        {p.name}
+                                                {p.name}
                       </span>
                     </td>
                     <td>{p.batchSupplyId ? `ПР-${p.batchSupplyId}` : '—'}</td>
@@ -963,8 +996,7 @@ export default function App() {
                   <tr key={s.name}>
                     <td>
                       <span className="product-name">
-                        <img className="food-emoji" src={s.image} alt={s.name} />
-                        {s.name}
+                                                {s.name}
                       </span>
                     </td>
                     <td>{s.reason}</td>
@@ -1092,6 +1124,9 @@ export default function App() {
               <option>90 дней</option>
             </select>
           </div>
+          <button className="button secondary" onClick={() => notify('Отчёт в файле пока не поддерживается API')}>
+            <Download size={16} /> Скачать отчёт
+          </button>
         </div>
         <div className="stats-grid">
           <StatCard icon={Trash2} label="Списано продуктов" value={writeOffs.reduce((sum, item) => sum + Number(item.totalQuantity || 0), 0).toLocaleString('ru-RU')} hint={`${writeOffs.length} позиций в отчёте`} tone="orange" />
@@ -1108,8 +1143,7 @@ export default function App() {
             <SectionTitle title="Потребность в поставках" subtitle="По текущим остаткам" />
             {products.filter(p => p.amount < 2).map(p => (
               <div className="need-row" key={p.id}>
-                <img className="food-emoji" src={p.image} alt={p.name} />
-                <div>
+                                <div>
                   <strong>{p.name}</strong>
                   <small>Остаток: {p.amount} {p.unit}</small>
                 </div>
@@ -1556,8 +1590,7 @@ export default function App() {
                   const chosenProduct = products.find(p => String(p.id) === String(item.productId));
                   return <div className="supply-line supply-line-card" key={index}>
                     <div className="supply-card-top">
-                      <div className="supply-product-thumb">{chosenProduct?.image ? <img src={chosenProduct.image} alt="" /> : <PackagePlus size={24} />}</div>
-                      <div className="supply-line-title"><strong>Продукт {index + 1}</strong><span>{item.productId ? 'Из каталога' : 'Новая позиция'}</span></div>
+                                            <div className="supply-line-title"><strong>Продукт {index + 1}</strong><span>{item.productId ? 'Из каталога' : 'Новая позиция'}</span></div>
                       {supplyForm.items.length > 1 && <button type="button" className="icon-button supply-delete" aria-label="Удалить позицию" onClick={() => setSupplyForm(f => ({ ...f, items: f.items.filter((_, i) => i !== index) }))}><Trash2 size={16} /></button>}
                     </div>
                     <label>Продукт из каталога<select value={item.productId} onChange={e => updateSupplyLine(index, 'productId', e.target.value)}><option value="">＋ Добавить новый продукт</option>{products.filter((p, i, arr) => arr.findIndex(x => x.name.toLowerCase() === p.name.toLowerCase()) === i).map(p => <option key={p.id} value={String(p.id)}>{p.name} ({p.unit})</option>)}</select></label>

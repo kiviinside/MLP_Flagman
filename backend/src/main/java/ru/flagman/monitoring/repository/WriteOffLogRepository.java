@@ -11,6 +11,8 @@ import java.util.List;
 
 public interface WriteOffLogRepository extends JpaRepository<WriteOffLog, Long> {
 
+    List<WriteOffLog> findAllByOrderByWriteOffDateAsc();
+
     @Query("""
             select new ru.flagman.monitoring.dto.WriteOffStatDto(p.name, p.unit, l.reason, sum(l.quantity))
             from WriteOffLog l join l.batch b join b.product p
