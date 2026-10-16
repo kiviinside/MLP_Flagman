@@ -144,6 +144,7 @@ mvn package
 ## Тестовые пароли
 
 admin — AdminSecure2024!
+
 Staff1 — staff12345678
 
 ## Назначение проекта
